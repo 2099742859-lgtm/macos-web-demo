@@ -945,6 +945,25 @@ function drawLaunchpad(filter) {
     toggleLaunchpad(false);
     openApp(a.dataset.app);
   }));
+  /* 启动台图标右键/双指轻点：添加到桌面 */
+  $$('#lpGrid .lp-app').forEach(a => a.addEventListener('contextmenu', e => {
+    e.preventDefault(); e.stopPropagation();
+    const id = a.dataset.app;
+    const ctx = $('#ctxMenu');
+    ctx.innerHTML = `
+      <div class="ctx-item" data-a="open">打开</div>
+      <div class="ctx-item" data-a="desk">添加到桌面</div>`;
+    ctx.style.left = Math.min(e.clientX, innerWidth - 170) + 'px';
+    ctx.style.top = Math.min(e.clientY, innerHeight - 110) + 'px';
+    ctx.classList.remove('hidden');
+    ctx.querySelectorAll('.ctx-item').forEach(it => it.addEventListener('pointerdown', ev => {
+      ev.stopPropagation();
+      ctx.classList.add('hidden');
+      toggleLaunchpad(false);
+      if (it.dataset.a === 'open') openApp(id);
+      else addAppShortcut(id);
+    }));
+  }));
 }
 
 /* ───────── 聚焦搜索（应用 + 文件 + 计算） ───────── */
@@ -1398,7 +1417,7 @@ const deskIcons = [
 ];
 function buildDeskIcons() {
   $('#deskIcons').innerHTML = deskIcons.map((d, i) =>
-    `<div class="desk-icon" data-i="${i}"><div class="di-img">${d[1].includes('icons/') ? `<img src="${d[1]}" draggable="false">` : d[1]}</div><div class="di-name">${d[0]}</div></div>`).join('');
+    `<div class="desk-icon" data-i="${i}"><div class="di-img">${d[1].startsWith('<') ? d[1] : `<img src="${d[1]}" draggable="false">`}</div><div class="di-name">${d[0]}</div></div>`).join('');
   $$('.desk-icon').forEach(di => {
     let t = 0;
     di.addEventListener('pointerdown', () => {
@@ -1407,7 +1426,8 @@ function buildDeskIcons() {
       const now = Date.now();
       if (now - t < 350) {
         const [name, , type] = deskIcons[+di.dataset.i];
-        if (type === 'hd' || type === 'folder') openApp('finder');
+        if (type && type.startsWith('app:')) openApp(type.slice(4));   /* 应用快捷方式 */
+        else if (type === 'hd' || type === 'folder') openApp('finder');
         else if (type === 'img') openApp('preview', { name, css: 'linear-gradient(135deg,#fccb90,#d57eeb)' });
         else quickLook(name);
       }
@@ -1416,12 +1436,18 @@ function buildDeskIcons() {
   });
 }
 function addDeskIcon(name, ico, type) {
-  /* 兼容旧的 emoji 调用 → 映射到真实图标 */
   if (ico === '📁') ico = 'icons/folder.png';
   if (ico === '🖼️') ico = 'icons/fileimage.png';
   deskIcons.push([name, ico, type || 'txt']);
   buildDeskIcons();
   notify('访达', `已创建「${name}」`);
+}
+/* 应用添加到桌面快捷方式 */
+function addAppShortcut(id) {
+  if (deskIcons.some(d => d[2] === 'app:' + id)) return notify('桌面', '快捷方式已存在');
+  deskIcons.push([APPS[id].name, APPS[id].icon(), 'app:' + id]);
+  buildDeskIcons();
+  notify('桌面', `已为「${APPS[id].name}」创建快捷方式`);
 }
 
 /* ───────── 右键菜单 ───────── */

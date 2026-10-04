@@ -2116,33 +2116,6 @@ const APPS = {
   },
 
   /* ─── 词典 ─── */
-  dictionary: {
-    name: '词典', icon: () => ICONS.dictionary(), w: 560, h: 400,
-    render(el) {
-      const DICT = {
-        'mac': '<b>Mac / Macintosh</b> <i>n.</i><br>苹果公司设计生产的个人电脑系列产品，1984 年发布。',
-        'apple': '<b>Apple</b> <i>n.</i><br>1. 苹果（果实）。2. 苹果公司，总部位于库比蒂诺。',
-        'dock': '<b>Dock（程序坞）</b> <i>n.</i><br>macOS 屏幕底部的应用启动栏。',
-        '访达': '<b>Finder（访达）</b> <i>n.</i><br>macOS 的文件管理器，那张蓝白笑脸。',
-        '鲸': '<b>鲸</b> <i>n.</i><br>海洋哺乳动物。据说有一只会写代码。',
-        'serendipity': '<b>serendipity</b> <i>n.</i><br>意外发现美好事物的运气。',
-      };
-      el.innerHTML = `<div class="dict">
-        <div class="dict-bar"><input id="dictIn" placeholder="输入单词"></div>
-        <div class="dict-body" id="dictBody"><div class="dict-hint">📖 输入单词查询释义</div></div></div>`;
-      const inp = el.querySelector('#dictIn'), body = el.querySelector('#dictBody');
-      const go = () => {
-        const q = inp.value.trim().toLowerCase();
-        if (!q) return;
-        body.innerHTML = DICT[q] ? `<div class="dict-word">${q}</div><div class="dict-def">${DICT[q]}</div>`
-          : `<div class="dict-hint">未收录「${q.replace(/</g, '&lt;')}」，试试 mac / apple / dock / 访达 / 鲸 / serendipity</div>`;
-      };
-      inp.addEventListener('keydown', e => e.key === 'Enter' && go());
-      inp.addEventListener('input', go);
-    }
-  },
-
-  /* ─── 废纸篓 ─── */
   trash: {
     name: '废纸篓', icon: () => ICONS.trash(), w: 560, h: 380,
     render(el) {
@@ -2172,6 +2145,42 @@ const APPS = {
         }));
       }
       draw();
+    }
+  },
+
+  /* ─── 词典（dictionaryapi.dev 英文 + LongCat 中文） ─── */
+  dictionary: {
+    name: '词典', icon: () => ICONS.dictionary(), w: 560, h: 440,
+    render(el) {
+      el.innerHTML = `<div class="dict-app">
+        <div class="dict-bar"><input id="dictIn" placeholder="输入单词或词语…" autocomplete="off"></div>
+        <div class="dict-body" id="dictBody"><div class="fs-empty" style="padding-top:80px">查个词试试<br><span style="font-size:12px;color:#999">英文走词典 API · 中文走 AI 释义</span></div></div></div>`;
+      const body = el.querySelector('#dictBody');
+      async function lookup(word) {
+        if (!word.trim()) return;
+        body.innerHTML = '<div class="sf-loading" style="padding-top:60px"><div class="sf-spinner"></div>查询中…</div>';
+        const isCN = /[一-鿿]/.test(word);
+        if (!isCN) {
+          const d = await fetchJSON(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, 10000);
+          if (d && d[0]) {
+            const e = d[0];
+            const ph = (e.phonetics.find(p => p.text) || {}).text || '';
+            body.innerHTML = `<div class="dict-word">${e.word}</div><div class="dict-ph">${ph}</div>` +
+              e.meanings.map(m => `<div class="dict-pos">${m.partOfSpeech}</div>` +
+                m.definitions.slice(0, 3).map((df, i) =>
+                  `<div class="dict-def"><b>${i + 1}.</b> ${df.definition}${df.example ? `<div class="dict-ex">"${df.example}"</div>` : ''}</div>`).join('')).join('');
+            return;
+          }
+          body.innerHTML = '<div class="fs-empty" style="padding-top:60px">未找到该单词</div>';
+          return;
+        }
+        /* 中文词语 → AI 释义 */
+        const r = await aiChat(`请用词典格式解释中文词语「${word}」：拼音（如有）、词性、释义（分条）、一个例句。排版紧凑。`);
+        body.innerHTML = r
+          ? `<div class="dict-word">${word}</div><div class="dict-def" style="white-space:pre-wrap">${r.replace(/\[.*?\]/g, '')}</div>`
+          : '<div class="fs-empty" style="padding-top:60px">查询失败，检查网络</div>';
+      }
+      el.querySelector('#dictIn').addEventListener('keydown', e => { if (e.key === 'Enter') lookup(e.target.value); });
     }
   },
 
