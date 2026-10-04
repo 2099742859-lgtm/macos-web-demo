@@ -20,6 +20,14 @@ for root, dirs, fs in os.walk(WEB):
             continue
         files[rel] = sha16(p)
 
+# 镜像 web 文件到 ota/（客户端从 ota/ 目录拉取差量文件）
+for rel in files:
+    src_p = os.path.join(WEB, rel)
+    dst_p = os.path.join(OTA, rel)
+    os.makedirs(os.path.dirname(dst_p), exist_ok=True)
+    import shutil
+    shutil.copy2(src_p, dst_p)
+
 # APK 出厂基线（首更即增量）
 with open(os.path.join(WEB, 'ota-manifest.json'), 'w') as f:
     json.dump(files, f)
