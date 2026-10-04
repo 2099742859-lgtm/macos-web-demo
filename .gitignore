@@ -1,0 +1,6 @@
+android/build/
+android/assets/
+android/debug.keystore
+dist/
+*.apk
+.DS_Store
