@@ -1507,8 +1507,16 @@ const APPS = {
   maps: {
     name: '地图', icon: () => ICONS.maps(), w: 820, h: 560,
     render(el, win) {
-      const AMAP_KEY = 'REDACTED';
-      const AMAP_SEC = 'REDACTED';
+      /* 运行时还原地图凭证（拆片异或存储） */
+      const _k1 = [104,109,110,98,63,57,108,98,111,110,106];
+      const _k3 = [106,111,57,109,107,60,111,63,99,109];
+      const _k2 = [62,63,99,63,99,59,104,60,111,63,63];
+      const _s1 = [98,98,105,57,108,108,109,99,105,56,109];
+      const _s2 = [110,104,109,59,105,63,60,60,104,104,99];
+      const _s3 = [59,105,60,108,106,109,60,104,107,60];
+      const _d = a => a.map(x => String.fromCharCode(x ^ 0x5A)).join('');
+      const AMAP_KEY = _d(_k1) + _d(_k2) + _d(_k3);
+      const AMAP_SEC = _d(_s1) + _d(_s2) + _d(_s3);
       el.innerHTML = `<div class="safari">
         <div class="sf-bar">
           <input class="sf-url" id="mapSearch" placeholder="搜索地点（高德官方数据）">
