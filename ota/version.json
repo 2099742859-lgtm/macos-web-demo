@@ -1,19 +1,19 @@
 {
-  "code": 3,
-  "name": "1.0.1",
+  "code": 4,
+  "name": "1.0.101_beta_dev_261004",
   "minCode": 1,
   "notes": [
-    "动画优化：窗口与 Dock 启用 GPU 合成，掉帧明显减少",
-    "提升系统稳定性：初始化模块隔离，单点异常不再影响全局",
-    "细节体验改进"
+    "修复更新源缓存陈旧导致显示旧版本号的问题",
+    "修复音乐/照片被旧演示版覆盖：恢复 iTunes 真实曲库",
+    "动画与稳定性细节改进"
   ],
   "files": {
     "index.html": "20042bfd677e3f21",
     "jszip.min.js": "acc7e41455a80765",
     "css/style.css": "644b8c202a8d39fc",
     "js/icons.js": "fdda72606f2370b3",
-    "js/apps.js": "d988111afd51454f",
-    "js/main.js": "d35007cd0e0dd02e",
+    "js/apps.js": "486f29c99c4b3b84",
+    "js/main.js": "db8d451c9b0a665c",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",

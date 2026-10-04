@@ -869,138 +869,6 @@ const APPS = {
     }
   },
   /* ─── 照片（带侧边栏） ─── */
-  photos: {
-    name: '照片', icon: () => ICONS.photos(), w: 760, h: 500,
-    render(el) {
-      el.innerHTML = `<div class="ph-app">
-        <div class="fs-side">
-          <div class="fs-sec">图库</div>
-          ${['时刻', '精选照片', '相簿'].map((s, i) =>
-            `<div class="fs-item ${i === 0 ? 'sel' : ''}"><span class="fs-glyph">${GLYPH.apps}</span>${s}</div>`).join('')}
-          <div class="fs-sec">媒体类型</div>
-          ${['照片', '视频', '自拍'].map(s =>
-            `<div class="fs-item"><span class="fs-glyph">${GLYPH.doc}</span>${s}</div>`).join('')}
-        </div>
-        <div class="ph-main">
-          <div class="ph-head"><b>时刻</b><span style="display:flex;gap:10px;align-items:center">
-            <span class="pill-btn on" id="phImport" style="font-size:11.5px">＋ 从相册导入</span>
-            <span>${PHOTOS.length} 张照片</span></span></div>
-          <div class="photos">${PHOTOS.map((p, i) =>
-            `<div class="photo" data-i="${i}">
-              ${p.img ? `<img src="${p.img}" style="width:100%;height:100%;object-fit:cover">` : `<div style="width:100%;height:100%;background:${p.css}"></div>`}
-            </div>`).join('')}</div>
-        </div></div>`;
-      const draw = () => render(el);
-      el.querySelectorAll('.photo').forEach(p => p.addEventListener('click', () => {
-        const ph = PHOTOS[+p.dataset.i];
-        openApp('preview', { name: ph.name + (ph.img ? '.jpg' : '.png'), css: ph.css, img: ph.img });
-      }));
-      el.querySelectorAll('.fs-item').forEach(it => it.addEventListener('click', () => {
-        el.querySelectorAll('.fs-item').forEach(x => x.classList.remove('sel'));
-        it.classList.add('sel');
-      }));
-      /* 调起安卓系统相册选择器 */
-      el.querySelector('#phImport').addEventListener('click', () => {
-        const inp = document.createElement('input');
-        inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
-        inp.onchange = () => {
-          let loaded = 0;
-          [...inp.files].forEach(f => {
-            const rd = new FileReader();
-            rd.onload = () => {
-              const k = 'photo_' + Date.now() + '_' + loaded;
-              IDB.put(k, rd.result);
-              PHOTOS.unshift({ name: f.name.replace(/\.[^.]+$/, ''), idb: k, img: rd.result });
-              if (++loaded === inp.files.length) { notify('照片', `已导入 ${loaded} 张`); draw(); }
-            };
-            rd.readAsDataURL(f);
-          });
-        };
-        inp.click();
-      });
-    }
-  },
-
-  /* ─── 音乐（Apple Music 布局 + 真实音频播放） ─── */
-  music: {
-    name: '音乐', icon: () => ICONS.music(), w: 760, h: 520,
-    render(el, win) {
-      const albums = [
-        ['Neon Skyline', 'Synthwave Collective', 'covers/m1.jpg', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'],
-        ['Midnight Drive', 'Night Runner', 'covers/m2.jpg', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3'],
-        ['Golden Hour', 'Sunset Ave', 'covers/m3.jpg', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3'],
-        ['Rainy Lo-Fi', 'Chill Beats', 'covers/m4.jpg', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3'],
-        ['Ocean Eyes', 'Deep Blue', 'covers/m5.jpg', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3'],
-        ['Starlight', 'Galaxy Express', 'covers/m6.jpg', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3'],
-      ];
-      let cur = 0, audio = null;
-      el.innerHTML = `<div class="mu-app">
-        <div class="mu-side">
-          <div class="fs-sec">资料库</div>
-          ${['最近添加', '专辑', '歌曲', '艺人'].map((s, i) =>
-            `<div class="fs-item ${i === 1 ? 'sel' : ''}"><span class="fs-glyph mu-red">${GLYPH.apps}</span>${s}</div>`).join('')}
-          <div class="fs-sec">播放列表</div>
-          ${['驾驶必备', '深夜专注', '运动燃脂'].map(s =>
-            `<div class="fs-item"><span class="fs-glyph mu-red">${GLYPH.doc}</span>${s}</div>`).join('')}
-        </div>
-        <div class="mu-main">
-          <div class="mu-grid">${albums.map((a, i) =>
-            `<div class="mu-album" data-i="${i}">
-              <img class="mu-cover" src="${a[2]}" draggable="false">
-              <div class="mu-an">${a[0]}</div><div class="mu-ar">${a[1]}</div></div>`).join('')}</div>
-          <div class="mu-player">
-            <img class="mu-mini-cover" id="muMini" src="${albums[0][2]}">
-            <div class="mu-track"><b id="muT">${albums[0][0]}</b><span id="muA">${albums[0][1]}</span>
-              <span class="mu-time" id="muTime">0:00 / 0:00</span></div>
-            <div class="mu-prog" id="muProg"><div class="mu-prog-fill" id="muFill"></div></div>
-            <div class="mu-ctl"><span id="muPrev">⏮</span><span class="mu-play" id="muPlay">▶</span><span id="muNext">⏭</span></div>
-          </div>
-        </div></div>`;
-      const fill = el.querySelector('#muFill'), btn = el.querySelector('#muPlay');
-      const fmt = s => isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00';
-      function playAlbum(i) {
-        cur = i;
-        const al = albums[i];
-        el.querySelector('#muT').textContent = al[0];
-        el.querySelector('#muA').textContent = al[1];
-        el.querySelector('#muMini').src = al[2];
-        if (!audio) {
-          audio = new Audio();
-          if (win) win._audio = audio;   /* 关窗自动静音 */
-          audio.addEventListener('timeupdate', () => {
-            if (!audio.duration || !document.contains(fill)) return;
-            fill.style.width = (audio.currentTime / audio.duration * 100) + '%';
-            el.querySelector('#muTime').textContent = `${fmt(audio.currentTime)} / ${fmt(audio.duration)}`;
-          });
-          audio.addEventListener('ended', () => playAlbum((cur + 1) % albums.length));
-          audio.addEventListener('error', () => {
-            btn.textContent = '▶';
-            notify('音乐', '音频加载失败（需要联网）');
-          });
-        }
-        audio.src = al[3];
-        audio.play().catch(() => notify('音乐', '需要联网才能播放'));
-        btn.textContent = '⏸';
-      }
-      el.querySelectorAll('.mu-album').forEach(a => a.addEventListener('click', () => playAlbum(+a.dataset.i)));
-      btn.addEventListener('click', () => {
-        if (!audio || !audio.src) return playAlbum(0);
-        if (audio.paused) { audio.play(); btn.textContent = '⏸'; }
-        else { audio.pause(); btn.textContent = '▶'; }
-      });
-      el.querySelector('#muPrev').addEventListener('click', () => playAlbum((cur - 1 + albums.length) % albums.length));
-      el.querySelector('#muNext').addEventListener('click', () => playAlbum((cur + 1) % albums.length));
-      el.querySelector('#muProg').addEventListener('pointerdown', e => {
-        if (!audio || !audio.duration) return;
-        const r = e.currentTarget.getBoundingClientRect();
-        audio.currentTime = (e.clientX - r.left) / r.width * audio.duration;
-      });
-    }
-  },
-
-
-
-  /* ─── App Store（真的能安装应用！） ─── */
   appstore: {
     name: 'App Store', icon: () => ICONS.appstore(), w: 820, h: 560,
     render(el) {
@@ -1370,18 +1238,18 @@ const APPS = {
             status.innerHTML = `<div class="sf-spinner" style="margin:14px auto 6px"></div><div style="color:#888;font-size:12.5px">正在测速更新源…</div>`;
             detail.innerHTML = '';
             const res = await otaSpeedTest();
-            const ok = res.filter(r => r.data && r.data.code).sort((a, b) => a.ms - b.ms);
+            const best = otaPick(res);
             /* 测速报告 */
             const report = `<div class="upd-sources">${res.map(r =>
               `<div class="upd-src"><span>${r.name}</span><span class="${r.data ? 'ok' : 'fail'}">${r.data ? r.ms + ' ms' : '超时 ✗'}</span></div>`).join('')}</div>`;
-            if (!ok.length) {
+            if (!best) {
               status.innerHTML = `<div style="color:#888;font-size:13px;margin-top:10px">🌐 所有更新源均不可达</div>` + report;
               return;
             }
-            const remote = ok[0].data;
-            const skip = +(localStorage.getItem('mac_skip_ver') || 0);
+            const remote = best.data;
             const force = remote.minCode && APP_VER.code < remote.minCode;
-            const has = remote.code > APP_VER.code && (remote.code > skip || force);
+            /* 手动检查不受"忽略版本"影响 */
+            const has = remote.code > APP_VER.code;
             if (!has) {
               status.innerHTML = `<div style="color:#30d158;font-size:15px;margin-top:10px">✓ 已是最新版本</div>` + report;
               return;
@@ -1409,7 +1277,7 @@ const APPS = {
               const prog = detail.querySelector('#updProg'), pct = detail.querySelector('#updPct'), fill = detail.querySelector('#updFill');
               prog.classList.remove('hidden'); pct.classList.remove('hidden');
               try {
-                const r = await otaApply(ok[0].base, remote, (p, label) => {
+                const r = await otaApply(best.base, remote, (p, label) => {
                   fill.style.width = (p * 100).toFixed(0) + '%';
                   pct.textContent = label + ' · ' + (p * 100).toFixed(0) + '%';
                 });

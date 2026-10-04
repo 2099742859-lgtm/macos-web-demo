@@ -356,13 +356,13 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 3, name: '1.0.1' };
+const APP_VER = { code: 4, name: '1.0.101_beta_dev_261004' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
   ['Ghproxy', 'https://ghproxy.net/https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
 ];
-/* 源测速：并发请求 version.json，最快的赢 */
+/* 源测速 + 防陈旧：以版本号最高的源为准（CDN 缓存可能滞后），下载源在最新源中选最快 */
 async function otaSpeedTest() {
   const results = await Promise.all(OTA_SOURCES.map(async ([name, base]) => {
     const t0 = performance.now();
@@ -371,18 +371,26 @@ async function otaSpeedTest() {
   }));
   return results;
 }
+function otaPick(res) {
+  const ok = res.filter(r => r.data && r.data.code);
+  if (!ok.length) return null;
+  const maxCode = Math.max(...ok.map(r => r.data.code));
+  /* 在拿到最新版本的源里选最快的下载 */
+  const fresh = ok.filter(r => r.data.code === maxCode).sort((a, b) => a.ms - b.ms);
+  return fresh[0];
+}
 async function otaCheck(silent) {
   if (!navigator.onLine) return null;
   const res = await otaSpeedTest();
-  const ok = res.filter(r => r.data && r.data.code).sort((a, b) => a.ms - b.ms);
-  if (!ok.length) return null;
-  const remote = ok[0].data;
+  const best = otaPick(res);
+  if (!best) return null;
+  const remote = best.data;
   const skip = +(localStorage.getItem('mac_skip_ver') || 0);
   /* 防回滚：只升不降；低于 minCode 强制更新 */
   const force = remote.minCode && APP_VER.code < remote.minCode;
   /* 忽略只屏蔽自动弹窗；手动检查不受忽略影响 */
   const has = remote.code > APP_VER.code && (!silent || remote.code > skip || force);
-  return has ? { remote, source: ok[0], all: res, force } : null;
+  return has ? { remote, source: best, all: res, force } : null;
 }
 /* 差量更新：只下载哈希变化的文件 */
 async function otaApply(sourceBase, manifest, onProgress) {
