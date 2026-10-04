@@ -1356,12 +1356,71 @@ const APPS = {
           });
         },
         update: () => {
-          main.innerHTML = `<h2>软件更新</h2><div style="text-align:center;padding:34px 0">
-            <div class="upd-gear">⚙️</div><div id="updStat" style="margin-top:14px;color:#666">正在检查更新…</div></div>`;
-          setTimeout(() => {
-            const s = main.querySelector('#updStat');
-            if (s) s.innerHTML = '<b style="color:#34c759;font-size:17px">✓ macOS Sequoia 15.2</b><br><span style="font-size:12.5px;color:#888">已是最新版本</span>';
-          }, 1800);
+          main.innerHTML = `<h2>软件更新</h2>
+          <div class="upd-glass" id="updGlass">
+            <div class="upd-gear-big">⚙️</div>
+            <div class="upd-title">macOS</div>
+            <div class="upd-ver">当前版本 ${APP_VER.name}（${APP_VER.code}）${window.AndroidBridge && AndroidBridge.isUpdated && AndroidBridge.isUpdated() ? ' · <span style="color:#30d158">OTA 增强版</span>' : ''}</div>
+            <div class="upd-btn" id="updCheck">检查更新</div>
+            <div class="upd-status" id="updStatus"></div>
+          </div>
+          <div id="updDetail"></div>`;
+          const status = main.querySelector('#updStatus'), detail = main.querySelector('#updDetail');
+          main.querySelector('#updCheck').addEventListener('click', async () => {
+            status.innerHTML = `<div class="sf-spinner" style="margin:14px auto 6px"></div><div style="color:#888;font-size:12.5px">正在测速更新源…</div>`;
+            detail.innerHTML = '';
+            const res = await otaSpeedTest();
+            const ok = res.filter(r => r.data && r.data.code).sort((a, b) => a.ms - b.ms);
+            /* 测速报告 */
+            const report = `<div class="upd-sources">${res.map(r =>
+              `<div class="upd-src"><span>${r.name}</span><span class="${r.data ? 'ok' : 'fail'}">${r.data ? r.ms + ' ms' : '超时 ✗'}</span></div>`).join('')}</div>`;
+            if (!ok.length) {
+              status.innerHTML = `<div style="color:#888;font-size:13px;margin-top:10px">🌐 所有更新源均不可达</div>` + report;
+              return;
+            }
+            const remote = ok[0].data;
+            const skip = +(localStorage.getItem('mac_skip_ver') || 0);
+            const force = remote.minCode && APP_VER.code < remote.minCode;
+            const has = remote.code > APP_VER.code && (remote.code > skip || force);
+            if (!has) {
+              status.innerHTML = `<div style="color:#30d158;font-size:15px;margin-top:10px">✓ 已是最新版本</div>` + report;
+              return;
+            }
+            status.innerHTML = `<div style="color:#ff9f0a;font-size:14px;margin-top:10px">发现新版本</div>` + report;
+            detail.innerHTML = `<div class="upd-glass" style="margin-top:12px">
+              <div class="upd-new">${remote.name}${force ? ' <span style="color:#ff3b30;font-size:12px">（必须更新）</span>' : ''}</div>
+              <div class="upd-notes">${(remote.notes || []).map(n => `· ${n}`).join('<br>')}</div>
+              <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+                <div class="upd-btn" id="updGo">立即更新</div>
+                ${force ? '' : '<div class="upd-btn ghost" id="updSkip">忽略此版本</div>'}
+              </div>
+              <div class="upd-prog hidden" id="updProg"><div class="upd-prog-fill" id="updFill"></div></div>
+              <div class="upd-pct hidden" id="updPct"></div></div>`;
+            const go = detail.querySelector('#updGo');
+            const sk = detail.querySelector('#updSkip');
+            if (sk) sk.addEventListener('click', () => {
+              localStorage.setItem('mac_skip_ver', remote.code);
+              detail.innerHTML = '';
+              status.innerHTML = `<div style="color:#888;font-size:13px;margin-top:10px">已忽略版本 ${remote.name}</div>`;
+            });
+            go.addEventListener('click', async () => {
+              go.style.display = 'none';
+              if (sk) sk.style.display = 'none';
+              const prog = detail.querySelector('#updProg'), pct = detail.querySelector('#updPct'), fill = detail.querySelector('#updFill');
+              prog.classList.remove('hidden'); pct.classList.remove('hidden');
+              try {
+                await otaApply(ok[0].base + remote.zip, (p, label) => {
+                  fill.style.width = (p * 100).toFixed(0) + '%';
+                  pct.textContent = label + ' · ' + (p * 100).toFixed(0) + '%';
+                });
+                pct.textContent = '✓ 更新完成，2 秒后自动重启…';
+                setTimeout(() => location.reload(), 2000);
+              } catch (e) {
+                pct.textContent = '✗ 更新失败：' + e.message;
+                go.style.display = ''; go.textContent = '重试';
+              }
+            });
+          });
         },
         storage: () => {
           const segs = [['系统', 38, '#8E8E93'], ['App', 52, '#0A84FF'], ['文稿', 26, '#30B0C7'], ['照片', 31, '#FF9F0A'], ['其他', 15, '#BF5AF2']];

@@ -355,6 +355,56 @@ function setBrightness(v) {
   $('#brightness').style.opacity = brightnessLevel;
 }
 
+/* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
+const APP_VER = { code: 1, name: '1.0.0' };
+const OTA_SOURCES = [
+  ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
+  ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
+  ['Ghproxy', 'https://ghproxy.net/https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
+];
+/* 源测速：并发请求 version.json，最快的赢 */
+async function otaSpeedTest() {
+  const results = await Promise.all(OTA_SOURCES.map(async ([name, base]) => {
+    const t0 = performance.now();
+    const d = await fetchJSON(base + 'version.json', 7000);
+    return { name, base, ms: Math.round(performance.now() - t0), data: d };
+  }));
+  return results;
+}
+async function otaCheck(silent) {
+  if (!navigator.onLine) return null;
+  const res = await otaSpeedTest();
+  const ok = res.filter(r => r.data && r.data.code).sort((a, b) => a.ms - b.ms);
+  if (!ok.length) return null;
+  const remote = ok[0].data;
+  const skip = +(localStorage.getItem('mac_skip_ver') || 0);
+  /* 防回滚：只升不降；低于 minCode 强制更新不可屏蔽 */
+  const force = remote.minCode && APP_VER.code < remote.minCode;
+  const has = remote.code > APP_VER.code && (remote.code > skip || force);
+  return has ? { remote, source: ok[0], all: res, force } : null;
+}
+async function otaApply(zipUrl, onProgress) {
+  const b64 = await bridgeBinary(zipUrl, 90000);
+  if (!b64) throw new Error('下载失败');
+  onProgress(0.55, '解压中…');
+  await (window.JSZip ? Promise.resolve() : new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'jszip.min.js'; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  }));
+  const zip = await JSZip.loadAsync(b64, { base64: true });
+  const files = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+  let done = 0;
+  for (const n of files) {
+    const content = await zip.files[n].async('base64');
+    const okFlag = AndroidBridge.writeWebFile(n, content);
+    if (!okFlag) throw new Error('写入失败: ' + n);
+    done++;
+    onProgress(0.55 + 0.45 * done / files.length, `写入 ${done}/${files.length}`);
+  }
+  localStorage.setItem('mac_ota_applied', '1');
+}
+
 /* ───────── IndexedDB 大文件存储（录音/下载/照片，不占 localStorage） ───────── */
 const IDB = {
   _db: null,
@@ -1441,6 +1491,20 @@ function enterDesktop() {
   setTimeout(() => d.classList.remove('login-appear'), 700);
   setWallpaper(wallIdx);
   setTimeout(() => notify('欢迎使用 macOS', '点按 Dock 图标打开应用，双指点按桌面查看更多选项'), 800);
+  /* 开机 3 秒后静默检测更新 */
+  setTimeout(async () => {
+    try {
+      const r = await otaCheck(true);
+      if (r) {
+        notify('软件更新', `发现新版本 ${r.remote.name}，点我去更新`);
+        const b = $('#banners .banner');
+        if (b) b.addEventListener('pointerdown', () => {
+          openApp('settings');
+          setTimeout(() => { const g = document.querySelector('.set-item[data-s="general"]'); if (g) g.click(); setTimeout(() => { const u = document.querySelector('.set-row[data-g="update"]'); if (u) u.click(); }, 200); }, 400);
+        });
+      }
+    } catch (e) {}
+  }, 3000);
 }
 
 /* ───────── 快捷键 ───────── */

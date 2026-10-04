@@ -119,7 +119,11 @@ public class MainActivity extends Activity {
             getWindow().setAttributes(lp);
         }
         w.addJavascriptInterface(new NetBridge(), "AndroidBridge");
-        w.loadUrl("file:///android_asset/index.html");
+        /* OTA：更新过的网页存私有目录，存在则加载新版 */
+        java.io.File otaIndex = new java.io.File(getFilesDir(), "web/index.html");
+        w.loadUrl(otaIndex.exists()
+            ? "file://" + otaIndex.getAbsolutePath()
+            : "file:///android_asset/index.html");
         enterImmersive();
     }
 
@@ -362,6 +366,37 @@ public class MainActivity extends Activity {
                     web.evaluateJavascript("window.__browserShot && window.__browserShot('data:image/jpeg;base64," + b64 + "')", null);
                 } catch (Exception ignored) {}
             });
+        }
+
+        /* OTA 更新：写入更新文件到私有 web 目录 */
+        @JavascriptInterface
+        public boolean writeWebFile(String path, String base64) {
+            try {
+                java.io.File f = new java.io.File(getFilesDir(), "web/" + path);
+                f.getParentFile().mkdirs();
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+                fos.write(Base64.decode(base64, Base64.NO_WRAP));
+                fos.close();
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        /* 回滚：清除 OTA 更新，回到 APK 内置版 */
+        @JavascriptInterface
+        public void clearWebUpdate() {
+            try {
+                java.io.File dir = new java.io.File(getFilesDir(), "web");
+                deleteRecursively(dir);
+            } catch (Exception ignored) {}
+        }
+        private void deleteRecursively(java.io.File f) {
+            if (f.isDirectory()) for (java.io.File c : f.listFiles()) deleteRecursively(c);
+            f.delete();
+        }
+
+        @JavascriptInterface
+        public boolean isUpdated() {
+            return new java.io.File(getFilesDir(), "web/index.html").exists();
         }
 
         /* 跳转系统 WiFi/蓝牙设置 */

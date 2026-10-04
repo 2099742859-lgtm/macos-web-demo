@@ -1513,3 +1513,30 @@ body.dark .set-row:hover, body.dark .set-row.vhover, body.dark .st-row:hover, bo
 
 /* 网页层快照 */
 .sf-shot { position:absolute; inset:0; width:100%; height:100%; object-fit:fill; z-index:3; }
+
+/* ═══ 软件更新 · 磨砂玻璃 ═══ */
+.upd-glass { background:rgba(255,255,255,.45); backdrop-filter:blur(40px) saturate(180%);
+  -webkit-backdrop-filter:blur(40px) saturate(180%);
+  border-radius:22px; padding:28px 22px; text-align:center;
+  box-shadow:0 8px 32px rgba(0,0,0,.1), inset 0 0 0 1px rgba(255,255,255,.5); }
+body.dark .upd-glass { background:rgba(40,40,46,.55); box-shadow:0 8px 32px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.12); }
+.upd-gear-big { font-size:56px; animation:gearSpin 4s linear infinite; display:inline-block; }
+.upd-title { font-size:26px; font-weight:700; margin-top:8px; }
+.upd-ver { font-size:12.5px; color:#888; margin-top:4px; }
+.upd-btn { display:inline-block; margin-top:16px; background:var(--accent); color:#fff; padding:8px 26px;
+  border-radius:18px; font-size:14px; font-weight:600; }
+.upd-btn:active { filter:brightness(.9); }
+.upd-btn.ghost { background:rgba(0,0,0,.08); color:var(--text); }
+body.dark .upd-btn.ghost { background:rgba(255,255,255,.12); }
+.upd-status { margin-top:6px; }
+.upd-sources { margin-top:14px; background:rgba(0,0,0,.04); border-radius:12px; padding:8px 14px; }
+body.dark .upd-sources { background:rgba(255,255,255,.06); }
+.upd-src { display:flex; justify-content:space-between; padding:5px 0; font-size:12.5px; }
+.upd-src .ok { color:#30d158; } .upd-src .fail { color:#ff3b30; }
+.upd-new { font-size:19px; font-weight:700; }
+.upd-notes { font-size:13px; color:#666; line-height:1.9; margin-top:8px; text-align:left; display:inline-block; }
+body.dark .upd-notes { color:#aaa; }
+.upd-prog { height:6px; border-radius:3px; background:rgba(0,0,0,.1); margin-top:16px; overflow:hidden; }
+body.dark .upd-prog { background:rgba(255,255,255,.12); }
+.upd-prog-fill { height:100%; width:0; border-radius:3px; background:var(--accent); transition:width .2s; }
+.upd-pct { font-size:12px; color:#888; margin-top:8px; }
