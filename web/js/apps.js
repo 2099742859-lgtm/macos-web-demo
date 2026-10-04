@@ -1409,11 +1409,12 @@ const APPS = {
               const prog = detail.querySelector('#updProg'), pct = detail.querySelector('#updPct'), fill = detail.querySelector('#updFill');
               prog.classList.remove('hidden'); pct.classList.remove('hidden');
               try {
-                await otaApply(ok[0].base + remote.zip, (p, label) => {
+                const r = await otaApply(ok[0].base, remote, (p, label) => {
                   fill.style.width = (p * 100).toFixed(0) + '%';
                   pct.textContent = label + ' · ' + (p * 100).toFixed(0) + '%';
                 });
-                pct.textContent = '✓ 更新完成，2 秒后自动重启…';
+                const sizeTxt = r && r.bytes ? `（增量 ${(r.bytes / 1024).toFixed(0)} KB / ${r.count} 个文件）` : '';
+                pct.textContent = `✓ 更新完成 ${sizeTxt}，2 秒后自动重启…`;
                 setTimeout(() => location.reload(), 2000);
               } catch (e) {
                 pct.textContent = '✗ 更新失败：' + e.message;

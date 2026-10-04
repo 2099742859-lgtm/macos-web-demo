@@ -11,6 +11,7 @@ OUT=/workspace/macos/dist
 echo '[1/6] 准备目录与资源'
 rm -rf "$B" "$P/assets"
 mkdir -p "$B/gen" "$B/classes" "$B/dex" "$P/assets" "$OUT"
+python3 /workspace/macos/ota-pack.py   # 生成出厂基线 ota-manifest.json + 刷新 OTA 哈希
 cp -r /workspace/macos/web/. "$P/assets/"
 
 echo '[2/6] aapt 打包资源 + 生成 R.java'

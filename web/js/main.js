@@ -378,31 +378,40 @@ async function otaCheck(silent) {
   if (!ok.length) return null;
   const remote = ok[0].data;
   const skip = +(localStorage.getItem('mac_skip_ver') || 0);
-  /* 防回滚：只升不降；低于 minCode 强制更新不可屏蔽 */
+  /* 防回滚：只升不降；低于 minCode 强制更新 */
   const force = remote.minCode && APP_VER.code < remote.minCode;
-  const has = remote.code > APP_VER.code && (remote.code > skip || force);
+  /* 忽略只屏蔽自动弹窗；手动检查不受忽略影响 */
+  const has = remote.code > APP_VER.code && (!silent || remote.code > skip || force);
   return has ? { remote, source: ok[0], all: res, force } : null;
 }
-async function otaApply(zipUrl, onProgress) {
-  const b64 = await bridgeBinary(zipUrl, 90000);
-  if (!b64) throw new Error('下载失败');
-  onProgress(0.55, '解压中…');
-  await (window.JSZip ? Promise.resolve() : new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'jszip.min.js'; s.onload = res; s.onerror = rej;
-    document.head.appendChild(s);
-  }));
-  const zip = await JSZip.loadAsync(b64, { base64: true });
-  const files = Object.keys(zip.files).filter(n => !zip.files[n].dir);
-  let done = 0;
-  for (const n of files) {
-    const content = await zip.files[n].async('base64');
-    const okFlag = AndroidBridge.writeWebFile(n, content);
-    if (!okFlag) throw new Error('写入失败: ' + n);
-    done++;
-    onProgress(0.55 + 0.45 * done / files.length, `写入 ${done}/${files.length}`);
+/* 差量更新：只下载哈希变化的文件 */
+async function otaApply(sourceBase, manifest, onProgress) {
+  /* 本地基线：优先 localStorage，其次 APK 出厂清单 */
+  let baseline = {};
+  try { baseline = JSON.parse(localStorage.getItem('mac_ota_hashes') || '{}'); } catch (e) {}
+  if (!Object.keys(baseline).length) {
+    try {
+      const m = await fetch('ota-manifest.json').then(r => r.json());
+      baseline = m || {};
+    } catch (e) {}
   }
+  const files = manifest.files || {};
+  const changed = Object.keys(files).filter(f => baseline[f] !== files[f]);
+  if (!changed.length) { onProgress(1, '无需更新'); return 0; }
+  let done = 0, bytes = 0;
+  for (const f of changed) {
+    onProgress(done / changed.length, `下载 ${f}`);
+    const b64 = await bridgeBinary(sourceBase + f, 30000);
+    if (!b64) throw new Error('下载失败: ' + f);
+    bytes += Math.round(b64.length * 3 / 4);
+    if (!AndroidBridge.writeWebFile(f, b64)) throw new Error('写入失败: ' + f);
+    baseline[f] = files[f];
+    done++;
+    onProgress(done / changed.length, `${done}/${changed.length} 个文件`);
+  }
+  localStorage.setItem('mac_ota_hashes', JSON.stringify(baseline));
   localStorage.setItem('mac_ota_applied', '1');
+  return { count: changed.length, bytes };
 }
 
 /* ───────── IndexedDB 大文件存储（录音/下载/照片，不占 localStorage） ───────── */
