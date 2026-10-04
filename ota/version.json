@@ -1,21 +1,19 @@
 {
-  "code": 2,
-  "name": "1.1.0",
+  "code": 3,
+  "name": "1.0.1",
   "minCode": 1,
   "notes": [
-    "OTA 在线更新上线",
-    "指针控制修复漂移",
-    "浏览器多标签页 + 下载功能",
-    "日历重做 / 天气可搜索城市",
-    "终端真文件系统 + zip/unzip"
+    "动画优化：窗口与 Dock 启用 GPU 合成，掉帧明显减少",
+    "提升系统稳定性：初始化模块隔离，单点异常不再影响全局",
+    "细节体验改进"
   ],
   "files": {
     "index.html": "20042bfd677e3f21",
     "jszip.min.js": "acc7e41455a80765",
-    "css/style.css": "50a90a669508ab82",
+    "css/style.css": "644b8c202a8d39fc",
     "js/icons.js": "fdda72606f2370b3",
     "js/apps.js": "d988111afd51454f",
-    "js/main.js": "213a1a7f786e67f8",
+    "js/main.js": "d35007cd0e0dd02e",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",
