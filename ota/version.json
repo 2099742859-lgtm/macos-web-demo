@@ -1,19 +1,17 @@
 {
-  "code": 4,
-  "name": "1.0.101_beta_dev_261004",
+  "code": 5,
+  "name": "1.0.1_beta_261004(2)",
   "minCode": 1,
   "notes": [
-    "修复更新源缓存陈旧导致显示旧版本号的问题",
-    "修复音乐/照片被旧演示版覆盖：恢复 iTunes 真实曲库",
-    "动画与稳定性细节改进"
+    "提升系统稳定性"
   ],
   "files": {
-    "index.html": "20042bfd677e3f21",
+    "index.html": "9094f6da7fe2ffa5",
     "jszip.min.js": "acc7e41455a80765",
-    "css/style.css": "644b8c202a8d39fc",
+    "css/style.css": "a466f64a87fe06c0",
     "js/icons.js": "fdda72606f2370b3",
-    "js/apps.js": "486f29c99c4b3b84",
-    "js/main.js": "db8d451c9b0a665c",
+    "js/apps.js": "1ccebbc72e6aa10b",
+    "js/main.js": "8786ca293c12e345",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",

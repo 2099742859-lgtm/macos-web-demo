@@ -76,7 +76,27 @@ const PHOTOS = [
 ].map(p => ({ name: p[1], img: p[0] }));
 
 /* 废纸篓 */
-const TRASH = ['旧方案 v3.sketch', '未命名.txt'];
+const TRASH = JSON.parse(localStorage.getItem('mac_trash') || '[]');
+function saveTrash() { localStorage.setItem('mac_trash', JSON.stringify(TRASH)); }
+function isDirName(name) { return !!VFS[name]; }
+/* 移到废纸篓（访达/桌面通用） */
+function moveToTrash(name) {
+  TRASH.push({ n: name, c: FILE_CONTENTS[name] || null, dir: isDirName(name) ? 1 : 0 });
+  saveTrash();
+  const i = (VFS['下载'] ? VFS['下载'].children : []).indexOf(name);
+  /* 从所有目录移除 */
+  Object.keys(VFS).forEach(d => {
+    const idx = VFS[d].children.indexOf(name);
+    if (idx >= 0) VFS[d].children.splice(idx, 1);
+  });
+  delete VFS[name]; delete FILE_CONTENTS[name];
+  saveVFS(); saveFiles();
+  if (typeof refreshDockTrash === 'function') refreshDockTrash();
+}
+function refreshDockTrash() {
+  const di = document.querySelector('.dock-item[data-app="trash"] .dock-ico');
+  if (di) di.innerHTML = ICONS.trash();
+}
 
 const APPS = {
   launchpad: { name: '启动台', icon: () => ICONS.launchpad(), w: 10, h: 10, render() {} },
@@ -125,6 +145,27 @@ const APPS = {
             selected = f.dataset.name;
             main.querySelectorAll('.fs-file').forEach(x => x.classList.remove('sel'));
             f.classList.add('sel');
+          });
+          /* 文件右键/双指轻点：上下文菜单 */
+          f.addEventListener('contextmenu', e => {
+            e.preventDefault(); e.stopPropagation();
+            const name = f.dataset.name;
+            const ctx = $('#ctxMenu');
+            ctx.innerHTML = `
+              <div class="ctx-item" data-a="open">打开</div>
+              <div class="ctx-item" data-a="ql">快速查看</div>
+              <div class="ctx-sep"></div>
+              <div class="ctx-item" data-a="trash" style="color:#ff3b30">移到废纸篓</div>`;
+            ctx.style.left = Math.min(e.clientX, innerWidth - 190) + 'px';
+            ctx.style.top = Math.min(e.clientY, innerHeight - 140) + 'px';
+            ctx.classList.remove('hidden');
+            ctx.querySelectorAll('.ctx-item').forEach(it => it.addEventListener('pointerdown', ev => {
+              ev.stopPropagation();
+              ctx.classList.add('hidden');
+              if (it.dataset.a === 'open') openFile(name);
+              else if (it.dataset.a === 'ql') quickLook(name);
+              else if (it.dataset.a === 'trash') { moveToTrash(name); selected = null; draw(); notify('访达', `「${name}」已移到废纸篓`); }
+            }));
           });
         });
       }
@@ -1077,12 +1118,20 @@ const APPS = {
           });
         },
         display: () => {
+          const resOpts = [[140, '更大文本'], [100, '默认'], [80, '更多空间']];
           main.innerHTML = `<h2>显示器</h2>` + card(
-            row('分辨率', `<span style="color:#888">${screen.width} × ${screen.height}</span>`) +
+            row('物理分辨率', `<span style="color:#888">${screen.width} × ${screen.height}</span>`) +
+            row('缩放', `<div class="seg-ctl" id="resSeg">${resOpts.map(([v, n]) =>
+              `<span class="${(settings.scale || 100) === v ? 'sel' : ''}" data-v="${v}">${n}</span>`).join('')}</div>`) +
             row('亮度', `<span class="range-wrap"><input type="range" min="20" max="100" value="${100 - brightnessLevel * 100}" id="setBright"></span>`) +
             row('原彩显示', tog(true)) + row('夜览', tog(false))) +
-            `<p style="color:#888;font-size:12.5px">拖动亮度条会实时压暗整个桌面</p>`;
+            `<p style="color:#888;font-size:12.5px">缩放实时改变界面元素大小；亮度条实时压暗整个桌面</p>`;
           bindToggles();
+          main.querySelectorAll('#resSeg span').forEach(s => s.addEventListener('click', () => {
+            main.querySelectorAll('#resSeg span').forEach(x => x.classList.remove('sel'));
+            s.classList.add('sel');
+            settings.scale = +s.dataset.v; saveSettings(); applyStage();
+          }));
           main.querySelector('#setBright').addEventListener('input', e => setBrightness(1 - e.target.value / 100 * 0.8));
         },
         datetime: () => {
@@ -2099,18 +2148,28 @@ const APPS = {
     render(el) {
       function draw() {
         el.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;background:inherit">
-          <div class="fs-toolbar"><b>废纸篓</b><span style="flex:1"></span>
+          <div class="fs-toolbar"><b>废纸篓</b><span style="color:#888;font-size:12px;margin-left:8px">${TRASH.length} 个项目</span><span style="flex:1"></span>
           ${TRASH.length ? '<span class="fs-empty-btn" id="trEmpty">清空</span>' : ''}</div>
-          <div class="fs-main" style="flex:1">${TRASH.map(t =>
-            `<div class="fs-file"><div class="ff-ico">${fileIcon(t)}</div><span>${t}</span></div>`).join('') ||
+          <div class="fs-main" style="flex:1">${TRASH.map((t, i) =>
+            `<div class="fs-file"><div class="ff-ico">${fileIcon(t.n)}</div><span>${t.n}</span>
+            <span class="fs-putback" data-i="${i}">放回原处</span></div>`).join('') ||
             '<div class="fs-empty">废纸篓是空的</div>'}</div></div>`;
         const b = el.querySelector('#trEmpty');
         if (b) b.addEventListener('click', () => {
-          TRASH.length = 0;
+          TRASH.length = 0; saveTrash();
           notify('废纸篓', '废纸篓已清空');
-          if (typeof refreshDockTrash === 'function') refreshDockTrash();
-          draw();
+          refreshDockTrash(); draw();
         });
+        el.querySelectorAll('.fs-putback').forEach(b => b.addEventListener('click', () => {
+          const t = TRASH[+b.dataset.i];
+          TRASH.splice(+b.dataset.i, 1);
+          if (t.dir) VFS[t.n] = VFS[t.n] || { children: [] };
+          if (t.c !== null) FILE_CONTENTS[t.n] = t.c;
+          (VFS['文稿'] ? VFS['文稿'].children : VFS['Macintosh HD'].children).push(t.n);
+          saveTrash(); saveVFS(); saveFiles();
+          notify('废纸篓', `「${t.n}」已放回文稿`);
+          refreshDockTrash(); draw();
+        }));
       }
       draw();
     }
@@ -2225,6 +2284,16 @@ const STORE_APPS = [
   { id: 'rain', name: '白噪音', cat: '生活', icon: '🌧️', bg: '#0a84ff', desc: '雨声专注助眠', playable: true },
   { id: 'compass', name: '指南针', cat: '工具', icon: '🧭', bg: '#5e5ce6', desc: '指明方向（演示）' },
   { id: 'pomodoro', name: '番茄钟', cat: '效率', icon: '🍅', bg: '#ff453a', desc: '25 分钟专注法', playable: true },
+  { id: 'tetris', name: '俄罗斯方块', cat: '游戏', icon: '🧱', bg: '#5e5ce6', desc: '经典方块消除', playable: true },
+  { id: 'tictactoe', name: '井字棋', cat: '游戏', icon: '⭕', bg: '#ff9f0a', desc: '挑战不败 AI', playable: true },
+  { id: 'memory', name: '记忆翻牌', cat: '游戏', icon: '🃏', bg: '#30b0c7', desc: '考验记忆力', playable: true },
+  { id: 'paint', name: '画板', cat: '创作', icon: '🎨', bg: '#ff375f', desc: '随手涂鸦创作', playable: true },
+  { id: 'translate', name: '翻译', cat: '工具', icon: '🌐', bg: '#0a84ff', desc: '多语言互译', playable: true },
+  { id: 'qrcode', name: '二维码', cat: '工具', icon: '▦', bg: '#8e8e93', desc: '文字网址转二维码', playable: true },
+  { id: 'poem', name: '每日诗词', cat: '生活', icon: '📜', bg: '#a2845e', desc: '今日诗词一首', playable: true },
+  { id: 'metronome', name: '节拍器', cat: '音乐', icon: '🎼', bg: '#af52de', desc: '练习节拍好帮手', playable: true },
+  { id: 'coin', name: '抛硬币', cat: '生活', icon: '🪙', bg: '#ffd60a', desc: '选择困难救星', playable: true },
+  { id: 'jokes', name: '冷笑话', cat: '娱乐', icon: '😄', bg: '#64d2ff', desc: 'AI 生成冷笑话', playable: true },
 ];
 
 /* ── 2048 ── */
@@ -2502,8 +2571,258 @@ function renderCompass(el) {
   }, 120);
 }
 
-const GAME_RENDERERS = { g2048: render2048, snake: renderSnake, mines: renderMines, rain: renderRain, pomodoro: renderPomodoro, compass: renderCompass };
-const GAME_SIZES = { g2048: [380, 560], snake: [400, 560], mines: [400, 540], rain: [420, 340], pomodoro: [420, 340], compass: [420, 420] };
+
+/* ── 俄罗斯方块 ── */
+function renderTetris(el) {
+  const COLS = 10, ROWS = 20, CS = 19;
+  const SHAPES = [
+    [[1,1,1,1]], [[1,1],[1,1]], [[0,1,0],[1,1,1]],
+    [[1,0,0],[1,1,1]], [[0,0,1],[1,1,1]], [[1,1,0],[0,1,1]], [[0,1,1],[1,1,0]],
+  ];
+  const COLORS = ['#0ff','#ff0','#a0f','#00f','#f80','#0f0','#f00'];
+  let grid, piece, px, py, pi, score, over, iv;
+  el.innerHTML = `<div class="tt-app"><canvas id="ttCv" width="${COLS*CS}" height="${ROWS*CS}"></canvas>
+    <div class="tt-side"><b>俄罗斯方块</b><span>得分 <b id="ttScore">0</b></span>
+    <span class="pill-btn on" id="ttNew">新游戏</span>
+    <div class="tt-keys">◀ ▶ 移动<br>▲ 旋转<br>▼ 加速</div></div></div>`;
+  const cv = el.querySelector('#ttCv'), cx = cv.getContext('2d');
+  function spawn() { pi = Math.floor(Math.random()*SHAPES.length); piece = SHAPES[pi].map(r=>r.slice()); px = 3; py = 0;
+    if (hit(px, py, piece)) { over = true; clearInterval(iv); } }
+  function hit(nx, ny, sh) {
+    return sh.some((row, y) => row.some((v, x) => v && (nx+x < 0 || nx+x >= COLS || ny+y >= ROWS || (ny+y >= 0 && grid[ny+y][nx+x]))));
+  }
+  function merge() { piece.forEach((row,y)=>row.forEach((v,x)=>{ if(v && py+y>=0) grid[py+y][px+x]=pi+1; })); }
+  function clearLines() {
+    let n = 0;
+    for (let y = ROWS-1; y >= 0; y--) if (grid[y].every(v=>v)) { grid.splice(y,1); grid.unshift(Array(COLS).fill(0)); n++; y++; }
+    if (n) { score += [0,40,100,300,1200][n]; el.querySelector('#ttScore').textContent = score; }
+  }
+  function rotate() { const r = piece[0].map((_,i)=>piece.map(row=>row[i]).reverse()); if (!hit(px,py,r)) piece = r; }
+  function draw() {
+    cx.fillStyle = '#111'; cx.fillRect(0,0,cv.width,cv.height);
+    for (let y=0;y<ROWS;y++) for (let x=0;x<COLS;x++) if (grid[y][x]) { cx.fillStyle = COLORS[grid[y][x]-1]; cx.fillRect(x*CS+1,y*CS+1,CS-2,CS-2); }
+    if (!over) piece.forEach((row,y)=>row.forEach((v,x)=>{ if(v){ cx.fillStyle = COLORS[pi]; cx.fillRect((px+x)*CS+1,(py+y)*CS+1,CS-2,CS-2);} }));
+    if (over) { cx.fillStyle = 'rgba(0,0,0,.6)'; cx.fillRect(0,0,cv.width,cv.height); cx.fillStyle = '#fff'; cx.font = '16px sans-serif'; cx.textAlign = 'center'; cx.fillText('游戏结束', cv.width/2, cv.height/2); }
+  }
+  function tick() { if (over) return; if (!hit(px, py+1, piece)) py++; else { merge(); clearLines(); spawn(); } draw(); }
+  function start() { grid = Array.from({length:ROWS},()=>Array(COLS).fill(0)); score = 0; over = false; el.querySelector('#ttScore').textContent = 0; spawn(); clearInterval(iv); iv = setInterval(tick, 450); draw(); }
+  const keyH = e => {
+    if (over) return;
+    if (e.key === 'ArrowLeft' && !hit(px-1,py,piece)) px--;
+    else if (e.key === 'ArrowRight' && !hit(px+1,py,piece)) px++;
+    else if (e.key === 'ArrowUp') rotate();
+    else if (e.key === 'ArrowDown') tick();
+    draw();
+  };
+  el.tabIndex = 0; el.addEventListener('keydown', keyH);
+  el.querySelector('#ttNew').addEventListener('click', start);
+  el.closest('.window')._cleanup = () => clearInterval(iv);
+  start();
+}
+
+/* ── 井字棋（Minimax AI） ── */
+function renderTicTacToe(el) {
+  let board, over;
+  el.innerHTML = `<div class="ttt-app"><b>井字棋 · 你执 ❌</b><div class="ttt-board" id="tttBoard"></div>
+    <div id="tttMsg" style="font-size:13px;color:#888"></div>
+    <span class="pill-btn on" id="tttNew">再来一局</span></div>`;
+  const bd = el.querySelector('#tttBoard');
+  function winner(b) {
+    const L = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    for (const [a,x,c] of L) if (b[a] && b[a]===b[x] && b[a]===b[c]) return b[a];
+    return b.every(v=>v) ? 'draw' : null;
+  }
+  function minimax(b, isMax) {
+    const w = winner(b);
+    if (w === 'O') return 1; if (w === 'X') return -1; if (w === 'draw') return 0;
+    let best = isMax ? -2 : 2;
+    for (let i = 0; i < 9; i++) if (!b[i]) {
+      b[i] = isMax ? 'O' : 'X';
+      best = isMax ? Math.max(best, minimax(b, false)) : Math.min(best, minimax(b, true));
+      b[i] = null;
+    }
+    return best;
+  }
+  function aiMove() {
+    let best = -2, move = -1;
+    for (let i = 0; i < 9; i++) if (!board[i]) {
+      board[i] = 'O';
+      const s = minimax(board, false);
+      board[i] = null;
+      if (s > best) { best = s; move = i; }
+    }
+    if (move >= 0) board[move] = 'O';
+  }
+  function draw() {
+    bd.innerHTML = board.map((v,i)=>`<div class="ttt-cell" data-i="${i}">${v==='X'?'❌':v==='O'?'⭕':''}</div>`).join('');
+    bd.querySelectorAll('.ttt-cell').forEach(c => c.addEventListener('click', () => {
+      if (over || board[+c.dataset.i]) return;
+      board[+c.dataset.i] = 'X';
+      if (!winner(board)) aiMove();
+      const w = winner(board);
+      if (w) { over = true; el.querySelector('#tttMsg').textContent = w==='draw'?'平局！':w==='X'?'你赢了！🎉':'AI 赢了～'; }
+      draw();
+    }));
+  }
+  function start() { board = Array(9).fill(null); over = false; el.querySelector('#tttMsg').textContent = ''; draw(); }
+  el.querySelector('#tttNew').addEventListener('click', start);
+  start();
+}
+
+/* ── 记忆翻牌 ── */
+function renderMemory(el) {
+  const EMO = ['🐳','🍎','🌙','⭐','🎵','🌸','🚀','🎨'];
+  let cards, open, matched, moves;
+  el.innerHTML = `<div class="mem-app"><b>记忆翻牌</b><span id="memInfo" style="font-size:13px;color:#888">步数 0</span>
+    <div class="mem-grid" id="memGrid"></div><span class="pill-btn on" id="memNew">新游戏</span></div>`;
+  const grid = el.querySelector('#memGrid');
+  function start() {
+    cards = [...EMO, ...EMO].sort(() => Math.random() - .5);
+    open = []; matched = 0; moves = 0;
+    el.querySelector('#memInfo').textContent = '步数 0';
+    grid.innerHTML = cards.map((c,i)=>`<div class="mem-card" data-i="${i}"><span class="mem-face">${c}</span></div>`).join('');
+    grid.querySelectorAll('.mem-card').forEach(card => card.addEventListener('click', () => {
+      const i = +card.dataset.i;
+      if (card.classList.contains('open') || card.classList.contains('done') || open.length === 2) return;
+      card.classList.add('open'); open.push({ card, i });
+      if (open.length === 2) {
+        moves++; el.querySelector('#memInfo').textContent = '步数 ' + moves;
+        const [a, b] = open;
+        if (cards[a.i] === cards[b.i]) {
+          a.card.classList.add('done'); b.card.classList.add('done'); matched += 2; open = [];
+          if (matched === 16) el.querySelector('#memInfo').textContent = `完成！共 ${moves} 步 🎉`;
+        } else setTimeout(() => { a.card.classList.remove('open'); b.card.classList.remove('open'); open = []; }, 650);
+      }
+    }));
+  }
+  el.querySelector('#memNew').addEventListener('click', start);
+  start();
+}
+
+/* ── 画板 ── */
+function renderPaint(el) {
+  el.innerHTML = `<div class="pt-app"><div class="pt-tools">
+    ${['#000','#ff3b30','#ff9500','#ffcc00','#34c759','#0a84ff','#af52de'].map((c,i)=>`<span class="pt-color ${i===0?'sel':''}" data-c="${c}" style="background:${c}"></span>`).join('')}
+    <input type="range" min="2" max="20" value="4" id="ptSize">
+    <span class="pill-btn" id="ptClear">清空</span></div>
+    <canvas id="ptCv" style="flex:1;cursor:crosshair;touch-action:none"></canvas></div>`;
+  const cv = el.querySelector('#ptCv'), cx = cv.getContext('2d');
+  setTimeout(() => { cv.width = cv.clientWidth; cv.height = cv.clientHeight; cx.fillStyle = '#fff'; cx.fillRect(0,0,cv.width,cv.height); }, 50);
+  let drawing = false, color = '#000', size = 4;
+  function pos(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  cv.addEventListener('pointerdown', e => { drawing = true; const [x,y] = pos(e); cx.beginPath(); cx.moveTo(x,y); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (!drawing) return; const [x,y] = pos(e); cx.strokeStyle = color; cx.lineWidth = size; cx.lineCap = 'round'; cx.lineTo(x,y); cx.stroke(); });
+  cv.addEventListener('pointerup', () => drawing = false);
+  el.querySelectorAll('.pt-color').forEach(c => c.addEventListener('click', () => {
+    el.querySelectorAll('.pt-color').forEach(x=>x.classList.remove('sel')); c.classList.add('sel'); color = c.dataset.c;
+  }));
+  el.querySelector('#ptSize').addEventListener('input', e => size = +e.target.value);
+  el.querySelector('#ptClear').addEventListener('click', () => { cx.fillStyle = '#fff'; cx.fillRect(0,0,cv.width,cv.height); });
+}
+
+/* ── 翻译（MyMemory 免费 API） ── */
+function renderTranslate(el) {
+  el.innerHTML = `<div class="tl-app"><b>翻译</b>
+    <textarea id="tlIn" placeholder="输入要翻译的文字…" rows="3"></textarea>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="tlFrom"><option value="zh-CN">中文</option><option value="en">English</option><option value="ja">日本語</option></select>
+      <span>→</span>
+      <select id="tlTo"><option value="en">English</option><option value="zh-CN">中文</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="fr">Français</option></select>
+      <span class="pill-btn on" id="tlGo">翻译</span></div>
+    <div class="tl-out" id="tlOut">译文会显示在这里</div></div>`;
+  el.querySelector('#tlGo').addEventListener('click', async () => {
+    const t = el.querySelector('#tlIn').value.trim();
+    if (!t) return;
+    el.querySelector('#tlOut').textContent = '翻译中…';
+    const d = await fetchJSON(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(t)}&langpair=${el.querySelector('#tlFrom').value}|${el.querySelector('#tlTo').value}`, 10000);
+    el.querySelector('#tlOut').textContent = d && d.responseData ? d.responseData.translatedText : '翻译失败，检查网络';
+  });
+}
+
+/* ── 二维码生成（qrserver 免费 API） ── */
+function renderQRCode(el) {
+  el.innerHTML = `<div class="qr-app"><b>二维码生成</b>
+    <input id="qrIn" placeholder="输入文字或网址…">
+    <span class="pill-btn on" id="qrGo">生成</span>
+    <div class="qr-box" id="qrBox"><span style="color:#888;font-size:13px">二维码预览</span></div></div>`;
+  el.querySelector('#qrGo').addEventListener('click', () => {
+    const t = el.querySelector('#qrIn').value.trim();
+    if (!t) return;
+    el.querySelector('#qrBox').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(t)}" width="180" height="180">`;
+  });
+}
+
+/* ── 每日诗词（今日诗词免费 API） ── */
+function renderPoem(el) {
+  el.innerHTML = `<div class="poem-app"><b>每日诗词</b><div class="poem-body" id="poemBody"><div class="sf-spinner"></div></div>
+    <span class="pill-btn on" id="poemNew">换一首</span></div>`;
+  async function load() {
+    el.querySelector('#poemBody').innerHTML = '<div class="sf-spinner"></div>';
+    const d = await fetchJSON('https://v2.jinrishici.com/one.json', 8000);
+    const b = el.querySelector('#poemBody');
+    if (d && d.data) b.innerHTML = `<div class="poem-content">${d.data.content}</div><div class="poem-from">—— ${d.data.origin.dynasty} · ${d.data.origin.author}《${d.data.origin.title}》</div>`;
+    else b.innerHTML = '<div style="color:#888">获取失败，检查网络</div>';
+  }
+  el.querySelector('#poemNew').addEventListener('click', load);
+  load();
+}
+
+/* ── 节拍器（Web Audio 真发声） ── */
+function renderMetronome(el) {
+  el.innerHTML = `<div class="met-app"><b>节拍器</b>
+    <div class="met-bpm"><span id="metBpm">100</span> BPM</div>
+    <input type="range" min="40" max="208" value="100" id="metSlider" style="width:220px">
+    <span class="pill-btn on" id="metBtn">开始</span></div>`;
+  let ac = null, iv = null;
+  function tick() {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.frequency.value = 1000;
+    g.gain.setValueAtTime(0.5, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.08);
+    o.start(); o.stop(ac.currentTime + 0.08);
+  }
+  el.querySelector('#metSlider').addEventListener('input', e => {
+    el.querySelector('#metBpm').textContent = e.target.value;
+    if (iv) { clearInterval(iv); iv = setInterval(tick, 60000 / +e.target.value); }
+  });
+  el.querySelector('#metBtn').addEventListener('click', () => {
+    if (iv) { clearInterval(iv); iv = null; el.querySelector('#metBtn').textContent = '开始'; }
+    else { tick(); iv = setInterval(tick, 60000 / +el.querySelector('#metSlider').value); el.querySelector('#metBtn').textContent = '停止'; }
+  });
+  el.closest('.window')._cleanup = () => { clearInterval(iv); if (ac) ac.close(); };
+}
+
+/* ── 抛硬币 ── */
+function renderCoin(el) {
+  el.innerHTML = `<div class="coin-app"><b>抛硬币</b><div class="coin" id="coinFace">🪙</div>
+    <span class="pill-btn on" id="coinGo">抛！</span><div id="coinRes" style="font-size:15px;font-weight:600"></div></div>`;
+  el.querySelector('#coinGo').addEventListener('click', () => {
+    const coin = el.querySelector('#coinFace');
+    coin.classList.add('flipping');
+    el.querySelector('#coinRes').textContent = '';
+    setTimeout(() => {
+      coin.classList.remove('flipping');
+      el.querySelector('#coinRes').textContent = Math.random() < 0.5 ? '正面！' : '反面！';
+    }, 900);
+  });
+}
+
+/* ── 冷笑话（LongCat AI 真生成） ── */
+function renderJokes(el) {
+  el.innerHTML = `<div class="joke-app"><b>冷笑话</b><div class="joke-body" id="jokeBody">点按钮来一个…</div>
+    <span class="pill-btn on" id="jokeNew">再来一个</span></div>`;
+  el.querySelector('#jokeNew').addEventListener('click', async () => {
+    const b = el.querySelector('#jokeBody');
+    b.textContent = '想梗中…';
+    const r = await aiChat('讲一个简短的中文冷笑话，只要笑话本身');
+    b.textContent = r ? r.replace(/\[.*?\]/g, '').trim() : '网络开小差了，待会儿再笑';
+  });
+}
+
+const GAME_RENDERERS = { g2048: render2048, snake: renderSnake, mines: renderMines, rain: renderRain, pomodoro: renderPomodoro, compass: renderCompass, tetris: renderTetris, tictactoe: renderTicTacToe, memory: renderMemory, paint: renderPaint, translate: renderTranslate, qrcode: renderQRCode, poem: renderPoem, metronome: renderMetronome, coin: renderCoin, jokes: renderJokes };
+const GAME_SIZES = { g2048: [380, 560], snake: [400, 560], mines: [400, 540], rain: [420, 340], pomodoro: [420, 340], compass: [420, 420], tetris: [420, 480], tictactoe: [340, 420], memory: [420, 480], paint: [560, 440], translate: [440, 400], qrcode: [360, 420], poem: [420, 360], metronome: [360, 340], coin: [320, 360], jokes: [400, 300] };
 
 /* 安装应用到系统（启动台 + 可选 Dock） */
 function installApp(id, silent) {

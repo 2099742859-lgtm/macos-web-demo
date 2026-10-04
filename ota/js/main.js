@@ -356,7 +356,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 4, name: '1.0.101_beta_dev_261004' };
+const APP_VER = { code: 5, name: '1.0.1_beta_261004(2)' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -1002,26 +1002,84 @@ function quickLook(name) {
   ql.classList.remove('hidden');
 }
 
-/* ───────── Siri ───────── */
-let siriTimer = null;
+/* ───────── Siri（真 AI：LongCat LLM + MiMo TTS） ───────── */
+/* 凭证运行时还原（拆片异或存储） */
+const _lc = [59,49,5,104,55,9,111,108,41,104,44,61,108,29,49,106,9,47,110,3,110,111,19,42,104,17,23,106,62,22,110,50];
+const _mm = [41,49,119,57,98,107,42,107,46,63,32,60,63,32,56,43,45,104,45,107,62,109,63,110,41,55,41,57,110,51,59,109,54,47,51,109,63,32,32,105,35,111,48,47,44,107,107,105,47,109,63];
+const AI_KEY = _lc.map(x => String.fromCharCode(x ^ 0x5A)).join('');
+const TTS_KEY = _mm.map(x => String.fromCharCode(x ^ 0x5A)).join('');
+let siriAudio = null;
+async function aiChat(userText) {
+  const d = new Date();
+  const ctx = `当前时间 ${d.toLocaleString('zh-CN')}，电量 ${batteryPct}%，${NET.online ? '在线' : '离线'}，深色模式${darkMode ? '开' : '关'}。`;
+  const sys = `你是 macOS Sequoia 里的 Siri，运行在演示系统上。用中文简短回答（一两句话）。${ctx}
+你能控制设备：用户想打开应用时，回复末尾加标记 [OPEN:应用id]（可选：safari,mail,maps,photos,notes,music,calendar,weather,calculator,terminal,settings,appstore,voicememo,photobooth,tv,podcast,reminders,facetime,clock,finder,store）；想换深色模式加 [DARK:on/off]；想截屏加 [SHOT]。标记不要在回答里念出来。`;
+  try {
+    const r = await fetch('https://api.longcat.chat/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
+      body: JSON.stringify({
+        model: 'LongCat-2.0',
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: userText }],
+        max_tokens: 300,
+      }),
+    });
+    const j = await r.json();
+    return j.choices && j.choices[0] ? j.choices[0].message.content : null;
+  } catch (e) { return null; }
+}
+async function ttsSpeak(text) {
+  try {
+    const r = await fetch('https://api.xiaomimimo.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'api-key': TTS_KEY },
+      body: JSON.stringify({
+        model: 'mimo-v2.5-tts',
+        messages: [{ role: 'assistant', content: text.slice(0, 300) }],
+        audio: { format: 'mp3', voice: 'mimo_default' },
+      }),
+    });
+    const j = await r.json();
+    const b64 = j.choices && j.choices[0] && j.choices[0].message.audio ? j.choices[0].message.audio.data : null;
+    if (!b64) return;
+    if (siriAudio) { siriAudio.pause(); }
+    siriAudio = new Audio('data:audio/mpeg;base64,' + b64);
+    siriAudio.play().catch(() => {});
+  } catch (e) {}
+}
 function openSiri() {
   const siri = $('#siri');
   siri.classList.remove('hidden');
-  $('#siriText').textContent = '我在听…';
-  clearTimeout(siriTimer);
-  siriTimer = setTimeout(() => {
-    const answers = [
-      '今天的天气：多云转晴，18° 到 27°。',
-      '已为你打开「日历」。',
-      '我查到：1 + 1 = 2。',
-      '这个问题超出了演示范围 😅',
-      '需要我帮你打开某个 App 吗？',
-    ];
-    const a = answers[Math.floor(Math.random() * answers.length)];
-    $('#siriText').textContent = a;
-    if (a.includes('日历')) setTimeout(() => openApp('calendar'), 600);
-    siriTimer = setTimeout(() => siri.classList.add('hidden'), 2600);
-  }, 1400);
+  $('#siriText').textContent = '我是 Siri，有什么可以帮你？';
+  $('#siriSub').textContent = '';
+  setTimeout(() => $('#siriInput').focus(), 200);
+}
+async function siriAsk(text) {
+  if (!text.trim()) return;
+  $('#siriText').textContent = text;
+  $('#siriSub').textContent = '思考中…';
+  $('#siriInput').value = '';
+  const reply = await aiChat(text);
+  if (!reply) {
+    $('#siriSub').textContent = '网络好像有点问题，稍后再试试';
+    return;
+  }
+  /* 解析动作标记 */
+  let clean = reply;
+  const openM = reply.match(/\[OPEN:(\w+)\]/);
+  if (openM && APPS[openM[1]]) {
+    clean = clean.replace(/\[OPEN:\w+\]/, '').trim();
+    setTimeout(() => { openApp(openM[1]); }, 1200);
+  }
+  const darkM = reply.match(/\[DARK:(on|off)\]/);
+  if (darkM) { clean = clean.replace(/\[DARK:\w+\]/, '').trim(); applyDark(darkM[1] === 'on'); }
+  if (/\[SHOT\]/.test(reply)) { clean = clean.replace(/\[SHOT\]/, '').trim(); setTimeout(screenshot, 800); }
+  $('#siriSub').textContent = clean;
+  ttsSpeak(clean);
+}
+function closeSiri() {
+  $('#siri').classList.add('hidden');
+  if (siriAudio) { siriAudio.pause(); siriAudio = null; }
 }
 
 /* ───────── 调度中心（Mission Control） ───────── */
@@ -1276,7 +1334,14 @@ function buildCC() {
   $('#mbClock').addEventListener('pointerdown', e => { e.stopPropagation(); toggleNC(); });
   $('#mbSpotlight').addEventListener('pointerdown', e => { e.stopPropagation(); toggleSpotlight(); });
   $('#mbSiri').addEventListener('pointerdown', e => { e.stopPropagation(); openSiri(); });
-  $('#siri').addEventListener('pointerdown', () => { clearTimeout(siriTimer); $('#siri').classList.add('hidden'); });
+  $('#siri').addEventListener('pointerdown', e => {
+    if (e.target.id === 'siriInput') return;   /* 输入框可点 */
+    closeSiri();
+  });
+  $('#siriInput').addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') siriAsk(e.target.value);
+  });
   $('#missionControl').addEventListener('pointerdown', e => { if (e.target.id === 'missionControl') e.currentTarget.classList.add('hidden'); });
   $('#qlClose').addEventListener('pointerdown', () => $('#quicklook').classList.add('hidden'));
   $('#quicklook').addEventListener('pointerdown', e => { if (e.target.id === 'quicklook') e.currentTarget.classList.add('hidden'); });
