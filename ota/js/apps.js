@@ -1339,7 +1339,11 @@ const APPS = {
                 detail.querySelector('.upd-notes').innerHTML = `<span style="color:#888;font-size:12.5px">${sizeTxt}，重启后生效</span>`;
                 const btnWrap = detail.querySelector('.upd-card div[style*="display:flex"]');
                 btnWrap.innerHTML = `<div class="upd-btn restart" id="updRestart">现在重启</div><div class="upd-btn ghost" id="updLater">稍后</div>`;
-                detail.querySelector('#updRestart').addEventListener('click', () => location.reload());
+                detail.querySelector('#updRestart').addEventListener('click', () => {
+                  /* 真·重启应用（清缓存+重建，切到 OTA 目录） */
+                  if (window.AndroidBridge && AndroidBridge.restartApp) AndroidBridge.restartApp();
+                  else location.reload();
+                });
                 detail.querySelector('#updLater').addEventListener('click', () => notify('软件更新', '更新已就绪，重启应用后生效'));
               } catch (e) {
                 pct.textContent = '✗ 更新失败：' + e.message;

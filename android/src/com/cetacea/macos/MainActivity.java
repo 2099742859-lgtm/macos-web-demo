@@ -404,6 +404,15 @@ public class MainActivity extends Activity {
             return new java.io.File(getFilesDir(), "web/index.html").exists();
         }
 
+        /* OTA 重启：清缓存 + 重建 Activity（onCreate 重新判断加载 OTA 目录） */
+        @JavascriptInterface
+        public void restartApp() {
+            runOnUiThread(() -> {
+                try { web.clearCache(true); } catch (Exception ignored) {}
+                recreate();
+            });
+        }
+
         /* 权限自检与引导 */
         @JavascriptInterface
         public boolean hasPermission(String p) {
