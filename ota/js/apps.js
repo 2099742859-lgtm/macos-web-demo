@@ -1106,7 +1106,9 @@ const APPS = {
             row('自动隐藏菜单栏', tog(settings.menubarHide, 'mbTg')) +
             row('24 小时制', tog(settings.clock24, 'h24Tg')) +
             row('显示秒', tog(settings.showSec, 'secTg'))) +
-          card(row('显示电池百分比', tog(true)) + row('显示 Siri', tog(true)) + row('显示聚焦搜索', tog(true)));
+          card(row('显示电池百分比', tog(settings.showBattPct !== false, 'mbBattPct')) +
+               row('显示 Siri', tog(settings.showSiri !== false, 'mbSiriTg')) +
+               row('显示聚焦搜索', tog(settings.showSpot !== false, 'mbSpotTg')));
           bindToggles();
           main.querySelector('#mbTg').addEventListener('click', e => {
             e.currentTarget.classList.toggle('on'); setMenubarHide(e.currentTarget.classList.contains('on'));
@@ -1117,6 +1119,16 @@ const APPS = {
           main.querySelector('#secTg').addEventListener('click', e => {
             e.currentTarget.classList.toggle('on'); setClockOpts(undefined, e.currentTarget.classList.contains('on'));
           });
+          /* 电池百分比 / Siri / 聚焦 显隐（真） */
+          const mbVis = (id, key) => {
+            const t = main.querySelector('#' + id);
+            if (t) t.addEventListener('click', e => {
+              settings[key] = e.currentTarget.classList.toggle('on'); saveSettings(); applyMenubarVis();
+            });
+          };
+          mbVis('mbBattPct', 'showBattPct');
+          mbVis('mbSiriTg', 'showSiri');
+          mbVis('mbSpotTg', 'showSpot');
         },
         display: () => {
           const resOpts = [[140, '更大文本'], [100, '默认'], [80, '更多空间']];
@@ -1125,7 +1137,7 @@ const APPS = {
             row('缩放', `<div class="seg-ctl" id="resSeg">${resOpts.map(([v, n]) =>
               `<span class="${(settings.scale || 100) === v ? 'sel' : ''}" data-v="${v}">${n}</span>`).join('')}</div>`) +
             row('亮度', `<span class="range-wrap"><input type="range" min="20" max="100" value="${100 - brightnessLevel * 100}" id="setBright"></span>`) +
-            row('原彩显示', tog(true)) + row('夜览', tog(false))) +
+            row('原彩显示', tog(settings.trueTone !== false, 'ttTg')) + row('夜览', tog(!!settings.nightShift, 'nsTg'))) +
             `<p style="color:#888;font-size:12.5px">缩放实时改变界面元素大小；亮度条实时压暗整个桌面</p>`;
           bindToggles();
           main.querySelectorAll('#resSeg span').forEach(s => s.addEventListener('click', () => {
@@ -1134,6 +1146,21 @@ const APPS = {
             settings.scale = +s.dataset.v; saveSettings(); applyStage();
           }));
           main.querySelector('#setBright').addEventListener('input', e => setBrightness(1 - e.target.value / 100 * 0.8));
+          const ttT = main.querySelector('#ttTg'), nsT = main.querySelector('#nsTg');
+          const applyTint = () => {
+            let lay = document.getElementById('nightShift');
+            const level = (settings.nightShift ? 0.22 : 0) + (settings.trueTone !== false ? 0.05 : 0);
+            if (!level) { if (lay) lay.remove(); return; }
+            if (!lay) {
+              lay = document.createElement('div');
+              lay.id = 'nightShift';
+              lay.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:8900;background:#ff9500;mix-blend-mode:multiply';
+              document.body.appendChild(lay);
+            }
+            lay.style.opacity = level;
+          };
+          if (ttT) ttT.addEventListener('click', e => { settings.trueTone = e.currentTarget.classList.toggle('on'); saveSettings(); applyTint(); });
+          if (nsT) nsT.addEventListener('click', e => { settings.nightShift = e.currentTarget.classList.toggle('on'); saveSettings(); applyTint(); });
         },
         datetime: () => {
           const now = new Date();
@@ -1192,7 +1219,7 @@ const APPS = {
         },
         bt: () => {
           main.innerHTML = `<h2>蓝牙</h2>` + card(
-            row('蓝牙', tog(true)) +
+            row('蓝牙', tog(settings.btOn !== false, 'btTg')) +
             `<div id="btReal"><div class="set-row"><span style="color:#888">正在读取已配对设备…</span></div></div>`) +
             card(`<div class="set-row" id="openBtSys"><span>打开系统蓝牙设置</span>${chev}</div>`);
           const info = window.AndroidBridge && AndroidBridge.getBtInfo ? AndroidBridge.getBtInfo() : null;
@@ -1224,8 +1251,21 @@ const APPS = {
         },
         noti: () => {
           main.innerHTML = `<h2>通知</h2>` + card(
-            row('允许通知', tog(true)) + row('通知摘要', tog(false)) + row('锁定屏幕上显示', tog(true)));
+            row('允许通知', tog(settings.allowNotif !== false, 'notifTg')) + row('通知摘要', tog(!!settings.notifSummary, 'ns2Tg')) + row('锁定屏幕上显示', tog(settings.lockNotif !== false, 'lnTg')));
           bindToggles();
+          const nTg = main.querySelector('#notifTg');
+          if (nTg) nTg.addEventListener('click', e => { settings.allowNotif = e.currentTarget.classList.toggle('on'); saveSettings(); });
+          const ns2 = main.querySelector('#ns2Tg');
+          if (ns2) ns2.addEventListener('click', e => { settings.notifSummary = e.currentTarget.classList.toggle('on'); saveSettings(); });
+          const lnT = main.querySelector('#lnTg');
+          if (lnT) lnT.addEventListener('click', e => { settings.lockNotif = e.currentTarget.classList.toggle('on'); saveSettings(); });
+          const btT = main.querySelector('#btTg');
+          if (btT) btT.addEventListener('click', e => {
+            settings.btOn = e.currentTarget.classList.toggle('on'); saveSettings();
+            const bI = document.querySelector('#ccBt .cc-ico');
+            if (bI) bI.classList.toggle('on', settings.btOn);
+            notify('蓝牙', settings.btOn ? '蓝牙已打开' : '蓝牙已关闭');
+          });
         },
         focus: () => {
           const modes = [['勿扰模式', 'moon', '#5E5CE6'], ['工作', 'doc', '#0A84FF'], ['个人', 'person', '#30B0C7'], ['睡眠', 'moon', '#30D158']];

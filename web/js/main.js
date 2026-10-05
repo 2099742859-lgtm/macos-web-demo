@@ -100,6 +100,27 @@ const toLX = x => x / viewScale;
 const toLY = y => y / viewScale;
 function applyScale() { applyStage(); }
 
+/* 菜单栏图标显隐（电池%/Siri/聚焦） */
+function applyMenubarVis() {
+  const siri = $('#mbSiri'), spot = $('#mbSpotlight');
+  if (siri) siri.style.display = settings.showSiri === false ? 'none' : '';
+  if (spot) spot.style.display = settings.showSpot === false ? 'none' : '';
+  updateBatteryPct();
+}
+function updateBatteryPct() {
+  const b = $('#mbBattery');
+  if (!b) return;
+  let span = b.querySelector('.mb-pct');
+  if (settings.showBattPct === false) { if (span) span.remove(); return; }
+  if (!span) {
+    span = document.createElement('span');
+    span.className = 'mb-pct';
+    span.style.cssText = 'font-size:11.5px;margin-right:3px';
+    b.prepend(span);
+  }
+  span.textContent = batteryPct + '%';
+}
+
 /* ───────── 联网（在线天气 / 时间 / 测速） ───────── */
 const NET = { online: navigator.onLine, lastCheck: 0 };
 function netCheck() {
@@ -487,6 +508,8 @@ function notifyIcon(app) {
   return ICONS.settings();
 }
 function notify(app, text) {
+  if (settings.allowNotif === false) return;          /* 通知总开关 */
+  if (settings.focusOn) return;                        /* 专注模式静默 */
   const iconHTML = notifyIcon(app);
   const b = document.createElement('div');
   b.className = 'banner';
@@ -1159,7 +1182,9 @@ async function aiChat(userText) {
 [SHOT] 截屏  [LOCK] 锁屏  [WALL:0-7] 换壁纸  [WIFI:on/off] 无线局域网
 [FOCUS:on/off] 专注模式  [WIDGETS:on/off] 桌面小组件  [MC] 调度中心
 [NOTE:内容] 写进备忘录  [REMIND:内容] 加提醒事项  [TIMER:分钟数] 倒计时
-[MUSIC:关键词] 搜索播放音乐  [TRASH] 清空废纸篓  [LAUNCHPAD] 启动台`;
+[MUSIC:关键词] 搜索播放音乐  [TRASH] 清空废纸篓  [LAUNCHPAD] 启动台
+[SLEEP] 睡眠  [RESTART] 重启  [SHUTDOWN] 关机  [SWITCHER] App切换器
+[SPOTLIGHT:关键词] 聚焦搜索  [NOTIFY:内容] 发系统通知  [SCALE:80-140] 界面缩放`;
     const r = await apiFetch('https://api.hcnsec.cn/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
@@ -1255,6 +1280,14 @@ function siriExec(reply) {
   eat(/\[MC\]/, () => setTimeout(openMC, 900), () => '打开了调度中心');
   eat(/\[LAUNCHPAD\]/, () => setTimeout(() => toggleLaunchpad(true), 900), () => '打开了启动台');
   eat(/\[TRASH\]/, () => { TRASH.length = 0; saveTrash(); refreshDockTrash(); notify('废纸篓', '已清空'); }, () => '清空了废纸篓');
+  /* 底层电源级控制 */
+  eat(/\[SLEEP\]/, () => setTimeout(sleep, 900), () => '已睡眠');
+  eat(/\[RESTART\]/, () => setTimeout(restart, 900), () => '正在重启');
+  eat(/\[SHUTDOWN\]/, () => setTimeout(shutdown, 900), () => '正在关机');
+  eat(/\[SWITCHER\]/, () => setTimeout(openSwitcher, 900), () => '打开了 App 切换器');
+  eat(/\[SPOTLIGHT:([^\]]+)\]/, m => setTimeout(() => { toggleSpotlight(true); const i = $('#spInput'); if (i) { i.value = m[1]; drawSpotlight(m[1]); } }, 900), m => `聚焦搜索「${m[1]}」`);
+  eat(/\[NOTIFY:([^\]]+)\]/, m => notify('Siri', m[1]), m => `发了通知「${m[1]}」`);
+  eat(/\[SCALE:(\d+)\]/, m => { settings.scale = Math.max(80, Math.min(140, +m[1])); saveSettings(); applyStage(); }, m => `界面缩放到${m[1]}%`);
   eat(/\[NOTE:([^\]]+)\]/, m => {
     const notes = JSON.parse(localStorage.getItem('mac_notes') || '[]');
     notes.unshift({ t: m[1].slice(0, 12), b: m[1] });
@@ -1818,6 +1851,7 @@ function startClock() {
       batteryPct = Math.round(b.level * 100);
       const lv = $('#battLevel'); if (lv) lv.setAttribute('width', 21 * b.level);
       const nb = $('#ncBatt'); if (nb) nb.innerHTML = `MacBook Air<br>${batteryPct}%${b.charging ? ' ⚡充电中' : ''}`;
+      updateBatteryPct();
     };
     f(); b.addEventListener('levelchange', f); b.addEventListener('chargingchange', f);
   }).catch(() => {});
