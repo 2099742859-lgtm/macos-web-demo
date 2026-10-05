@@ -1274,6 +1274,16 @@ const APPS = {
           });
         },
         update: () => {
+          /* 上次更新记录（重启后仍显示） */
+          let lastUpd = null;
+          try { lastUpd = JSON.parse(localStorage.getItem('mac_last_update') || 'null'); } catch (e) {}
+          const lastCard = lastUpd && lastUpd.name === APP_VER.name
+            ? `<div class="upd-card" style="margin-top:12px;text-align:left">
+                <div class="upd-new" style="font-size:15px">已更新至 ${lastUpd.name}</div>
+                <div class="upd-notes">${lastUpd.notes.map(n => `· ${n}`).join('<br>')}</div>
+                <div style="font-size:11.5px;color:#888;margin-top:8px">${new Date(lastUpd.at).toLocaleString('zh-CN')}</div>
+              </div>`
+            : '';
           main.innerHTML = `<h2>软件更新</h2>
           <div class="upd-hero" id="updGlass">
             <div class="upd-gear-big">${GLYPH.gearBig}</div>
@@ -1282,6 +1292,7 @@ const APPS = {
             <div class="upd-btn" id="updCheck">检查更新</div>
             <div class="upd-status" id="updStatus"></div>
           </div>
+          ${lastCard}
           <div id="updDetail"></div>`;
           const status = main.querySelector('#updStatus'), detail = main.querySelector('#updDetail');
           main.querySelector('#updCheck').addEventListener('click', async () => {

@@ -356,7 +356,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 15, name: '1.0.2_beta_261005(11)' };
+const APP_VER = { code: 16, name: '1.0.2_beta_261005(12)' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -419,6 +419,10 @@ async function otaApply(sourceBase, manifest, onProgress) {
   }
   localStorage.setItem('mac_ota_hashes', JSON.stringify(baseline));
   localStorage.setItem('mac_ota_applied', '1');
+  /* 更新日志留存：重启后仍可在更新页查看 */
+  localStorage.setItem('mac_last_update', JSON.stringify({
+    name: manifest.name, notes: manifest.notes || [], at: Date.now(),
+  }));
   return { count: changed.length, bytes };
 }
 
@@ -502,7 +506,13 @@ function drawNotifList() {
     `<div class="nc-notif">${n.icon}<div><div class="nc-n-t">${n.app}</div><div class="nc-n-b">${n.text}</div></div></div>`
   ).join('') || '<div style="text-align:center;color:#fff;opacity:.7;margin-top:20px;text-shadow:0 1px 4px rgba(0,0,0,.4)">没有新通知</div>');
   const c = $('#ncClear');
-  if (c) c.addEventListener('pointerdown', () => { notifHistory.length = 0; drawNotifList(); });
+  if (c) c.addEventListener('pointerdown', e => {
+    e.stopPropagation();   /* 防止冒泡把通知中心一起关了 */
+    /* 逐条滑出动画，最后清空 */
+    const items = list.querySelectorAll('.nc-notif');
+    items.forEach((it, i) => setTimeout(() => it.classList.add('nc-out'), i * 45));
+    setTimeout(() => { notifHistory.length = 0; drawNotifList(); }, 45 * items.length + 260);
+  });
 }
 
 /* ───────── 窗口管理器 ───────── */
@@ -1125,7 +1135,7 @@ async function apiFetch(url, opts, timeoutMs, retries) {
 }
 
 let siriAudio = null;
-const siriHist = [];   /* 上下文记忆（有界：最近 6 轮） */
+const siriHist = [];   /* 上下文记忆（有界：最近 16 轮） */
 async function aiChat(userText) {
   const err = rateOK();
   if (err) return '⚠ ' + err;
@@ -1144,10 +1154,12 @@ async function aiChat(userText) {
     const sys = `你是这台 macOS 设备的 Siri。用中文简短回答（一两句话）。${ctx}
 你完全掌控这台设备，可以执行动作（回复末尾加标记，正文不要念出标记）：
 [OPEN:应用id] 打开应用（safari,mail,maps,photos,notes,music,calendar,weather,calculator,terminal,settings,appstore,voicememo,photobooth,tv,podcast,reminders,facetime,clock,finder,dictionary）
-[CLOSE:应用id] 关闭应用  [DARK:on/off] 深色模式  [BRIGHT:0-100] 亮度  [VOL:0-100] 音量
+[CLOSE:应用id] 关闭应用  [CLOSEALL] 关闭全部窗口  [SHOWDESKTOP] 显示桌面
+[DARK:on/off] 深色模式  [BRIGHT:0-100] 亮度  [VOL:0-100] 音量
 [SHOT] 截屏  [LOCK] 锁屏  [WALL:0-7] 换壁纸  [WIFI:on/off] 无线局域网
+[FOCUS:on/off] 专注模式  [WIDGETS:on/off] 桌面小组件  [MC] 调度中心
 [NOTE:内容] 写进备忘录  [REMIND:内容] 加提醒事项  [TIMER:分钟数] 倒计时
-[MUSIC:关键词] 搜索播放音乐`;
+[MUSIC:关键词] 搜索播放音乐  [TRASH] 清空废纸篓  [LAUNCHPAD] 启动台`;
     const r = await apiFetch('https://api.hcnsec.cn/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
@@ -1175,7 +1187,7 @@ async function ttsSpeak(text) {
       body: JSON.stringify({
         model: 'mimo-v2.5-tts',
         messages: [{ role: 'assistant', content: text.slice(0, 300) }],
-        audio: { format: 'mp3', voice: 'mimo_default' },
+        audio: { format: 'mp3', voice: '茉莉' },
       }),
     }, 30000, 1);
     const j = await r.json();
@@ -1224,6 +1236,8 @@ function siriExec(reply) {
   const eat = (re, fn) => { const m = clean.match(re); if (m) { clean = clean.replace(re, '').trim(); fn(m); } };
   eat(/\[OPEN:(\w+)\]/, m => { if (APPS[m[1]]) setTimeout(() => openApp(m[1]), 1200); });
   eat(/\[CLOSE:(\w+)\]/, m => { const w = winByApp[m[1]]; if (w) closeWindow(w); });
+  eat(/\[CLOSEALL\]/, () => Object.keys(winByApp).forEach(id => { const w = winByApp[id]; if (w && document.getElementById(w)) closeWindow(w); }));
+  eat(/\[SHOWDESKTOP\]/, () => { $$('.window').forEach(w => minimizeWindow(w.id)); });
   eat(/\[DARK:(on|off)\]/, m => applyDark(m[1] === 'on'));
   eat(/\[BRIGHT:(\d+)\]/, m => setBrightness(1 - Math.min(100, +m[1]) / 100 * 0.8));
   eat(/\[VOL:(\d+)\]/, m => { if (window.AndroidBridge && AndroidBridge.setVolumePct) AndroidBridge.setVolumePct(+m[1]); });
@@ -1231,6 +1245,11 @@ function siriExec(reply) {
   eat(/\[LOCK\]/, () => setTimeout(() => lockScreen(), 1000));
   eat(/\[WALL:(\d)\]/, m => setWallpaper(Math.min(7, +m[1])));
   eat(/\[WIFI:(on|off)\]/, m => notify('无线局域网', m[1] === 'on' ? '已打开' : '已关闭'));
+  eat(/\[FOCUS:(on|off)\]/, m => { settings.focusOn = m[1] === 'on'; saveSettings(); notify('专注模式', settings.focusOn ? '已开启' : '已关闭'); });
+  eat(/\[WIDGETS:(on|off)\]/, m => toggleWidgets(m[1] === 'on'));
+  eat(/\[MC\]/, () => setTimeout(openMC, 900));
+  eat(/\[LAUNCHPAD\]/, () => setTimeout(() => toggleLaunchpad(true), 900));
+  eat(/\[TRASH\]/, () => { TRASH.length = 0; saveTrash(); refreshDockTrash(); notify('废纸篓', '已清空'); });
   eat(/\[NOTE:([^\]]+)\]/, m => {
     const notes = JSON.parse(localStorage.getItem('mac_notes') || '[]');
     notes.unshift({ t: m[1].slice(0, 12), b: m[1] });
@@ -1275,9 +1294,9 @@ async function siriAsk(text) {
   const clean = siriExec(reply);
   $('#siriSub').textContent = clean;
   /* 记入上下文（各截断 200 字，最多 6 轮 = 12 条） */
-  siriHist.push({ role: 'user', content: text.slice(0, 200) });
-  siriHist.push({ role: 'assistant', content: clean.slice(0, 200) });
-  while (siriHist.length > 12) siriHist.shift();
+  siriHist.push({ role: 'user', content: text.slice(0, 400) });
+  siriHist.push({ role: 'assistant', content: clean.slice(0, 400) });
+  while (siriHist.length > 32) siriHist.shift();
   ttsSpeak(clean);
 }
 function closeSiri() {

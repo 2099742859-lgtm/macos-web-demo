@@ -1650,3 +1650,7 @@ body.dark .upd-card { background:rgba(44,44,50,.55); box-shadow:0 8px 28px rgba(
 .siri-tts.muted { opacity:.45; }
 .upd-fail { display:flex; align-items:center; justify-content:center; gap:6px; color:#888; font-size:13px; margin-top:10px; }
 .upd-fail .upd-ico svg { width:16px; height:16px; }
+
+/* ═══ 通知清除滑出动画 ═══ */
+.nc-notif { transition: transform .25s ease, opacity .25s ease; }
+.nc-notif.nc-out { transform: translateX(110%); opacity: 0; }
