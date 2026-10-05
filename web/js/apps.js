@@ -1137,13 +1137,13 @@ const APPS = {
             settings.fontSize = +e.target.value; saveSettings(); applyScale();
           });
           main.querySelector('#animTg').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setAnim(e.currentTarget.classList.contains('on'), undefined);
+            setAnim(e.currentTarget.classList.contains('on'), undefined);
           });
           main.querySelector('#animSp').addEventListener('input', e => {
             main.querySelector('#animSpVal').textContent = e.target.value + '%'; setAnim(undefined, +e.target.value);
           });
           main.querySelector('#rtTg').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setExtra('reduceTransparency', e.currentTarget.classList.contains('on'));
+            setExtra('reduceTransparency', e.currentTarget.classList.contains('on'));
           });
         },
         wall: () => {
@@ -1182,17 +1182,16 @@ const APPS = {
             main.querySelector('#dockSizeVal').textContent = e.target.value + 'px'; setDockSize(+e.target.value);
           });
           main.querySelector('#dockMag').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setMagnify(e.currentTarget.classList.contains('on'));
+            setMagnify(e.currentTarget.classList.contains('on'));
           });
           main.querySelector('#dockHide').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setAutohide(e.currentTarget.classList.contains('on'));
+            setAutohide(e.currentTarget.classList.contains('on'));
           });
           main.querySelectorAll('.pill-btn[data-pos]').forEach(b => b.addEventListener('click', () => {
             main.querySelectorAll('.pill-btn[data-pos]').forEach(x => x.classList.remove('on'));
             b.classList.add('on'); setDockPos(b.dataset.pos);
           }));
           main.querySelector('#wgTg').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on');
             toggleWidgets(e.currentTarget.classList.contains('on'));
           });
         },
@@ -1206,19 +1205,21 @@ const APPS = {
                row('显示聚焦搜索', tog(settings.showSpot !== false, 'mbSpotTg')));
           bindToggles();
           main.querySelector('#mbTg').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setMenubarHide(e.currentTarget.classList.contains('on'));
+            setMenubarHide(e.currentTarget.classList.contains('on'));
           });
           main.querySelector('#h24Tg').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setClockOpts(e.currentTarget.classList.contains('on'), undefined);
+            setClockOpts(e.currentTarget.classList.contains('on'), undefined);
           });
           main.querySelector('#secTg').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setClockOpts(undefined, e.currentTarget.classList.contains('on'));
+            setClockOpts(undefined, e.currentTarget.classList.contains('on'));
           });
           /* 电池百分比 / Siri / 聚焦 显隐（真） */
           const mbVis = (id, key) => {
             const t = main.querySelector('#' + id);
             if (t) t.addEventListener('click', e => {
-              settings[key] = e.currentTarget.classList.toggle('on'); saveSettings(); applyMenubarVis();
+              /* bindToggles 已经切换过 class，这里只读取结果（防双重切换） */
+              settings[key] = e.currentTarget.classList.contains('on');
+              saveSettings(); applyMenubarVis();
             });
           };
           mbVis('mbBattPct', 'showBattPct');
@@ -1254,8 +1255,8 @@ const APPS = {
             }
             lay.style.opacity = level;
           };
-          if (ttT) ttT.addEventListener('click', e => { settings.trueTone = e.currentTarget.classList.toggle('on'); saveSettings(); applyTint(); });
-          if (nsT) nsT.addEventListener('click', e => { settings.nightShift = e.currentTarget.classList.toggle('on'); saveSettings(); applyTint(); });
+          if (ttT) ttT.addEventListener('click', e => { settings.trueTone = saveSettings(); applyTint(); });
+          if (nsT) nsT.addEventListener('click', e => { settings.nightShift = saveSettings(); applyTint(); });
         },
         datetime: () => {
           const now = new Date();
@@ -1266,10 +1267,10 @@ const APPS = {
                  row('时区', `<span style="color:#888">${Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'}</span>`) +
                  row('网络时间', `<span style="color:${navigator.onLine ? '#34c759' : '#ff3b30'}">${navigator.onLine ? '已同步 ✓' : '离线'}</span>`));
           main.querySelector('#dt24').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setClockOpts(e.currentTarget.classList.contains('on'), undefined); pages.datetime();
+            setClockOpts(e.currentTarget.classList.contains('on'), undefined); pages.datetime();
           });
           main.querySelector('#dtSec').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setClockOpts(undefined, e.currentTarget.classList.contains('on'));
+            setClockOpts(undefined, e.currentTarget.classList.contains('on'));
           });
         },
         net: () => {
@@ -1330,7 +1331,7 @@ const APPS = {
           /* 蓝牙开关（绑定在本页） */
           const btT = main.querySelector('#btTg');
           if (btT) btT.addEventListener('click', e => {
-            settings.btOn = e.currentTarget.classList.toggle('on'); saveSettings();
+            settings.btOn = saveSettings();
             const bI = document.querySelector('#ccBt .cc-ico');
             if (bI) bI.classList.toggle('on', settings.btOn);
             notify('蓝牙', settings.btOn ? '蓝牙已打开' : '蓝牙已关闭');
@@ -1357,11 +1358,11 @@ const APPS = {
             row('允许通知', tog(settings.allowNotif !== false, 'notifTg')) + row('通知摘要', tog(!!settings.notifSummary, 'ns2Tg')) + row('锁定屏幕上显示', tog(settings.lockNotif !== false, 'lnTg')));
           bindToggles();
           const nTg = main.querySelector('#notifTg');
-          if (nTg) nTg.addEventListener('click', e => { settings.allowNotif = e.currentTarget.classList.toggle('on'); saveSettings(); });
+          if (nTg) nTg.addEventListener('click', e => { settings.allowNotif = saveSettings(); });
           const ns2 = main.querySelector('#ns2Tg');
-          if (ns2) ns2.addEventListener('click', e => { settings.notifSummary = e.currentTarget.classList.toggle('on'); saveSettings(); });
+          if (ns2) ns2.addEventListener('click', e => { settings.notifSummary = saveSettings(); });
           const lnT = main.querySelector('#lnTg');
-          if (lnT) lnT.addEventListener('click', e => { settings.lockNotif = e.currentTarget.classList.toggle('on'); saveSettings(); });
+          if (lnT) lnT.addEventListener('click', e => { settings.lockNotif = saveSettings(); });
         },
         focus: () => {
           const modes = [['勿扰模式', 'moon', '#5E5CE6'], ['工作', 'doc', '#0A84FF'], ['个人', 'person', '#30B0C7'], ['睡眠', 'moon', '#30D158']];
@@ -1384,13 +1385,13 @@ const APPS = {
             row('减弱动态效果', tog(!settings.animOn, 'acAnim')) +
             row('台前调度', tog(settings.stageLight, 'acStage')));
           main.querySelector('#acRt').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setExtra('reduceTransparency', e.currentTarget.classList.contains('on'));
+            setExtra('reduceTransparency', e.currentTarget.classList.contains('on'));
           });
           main.querySelector('#acAnim').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setAnim(!e.currentTarget.classList.contains('on'), undefined);
+            setAnim(!e.currentTarget.classList.contains('on'), undefined);
           });
           main.querySelector('#acStage').addEventListener('click', e => {
-            e.currentTarget.classList.toggle('on'); setExtra('stageLight', e.currentTarget.classList.contains('on'));
+            setExtra('stageLight', e.currentTarget.classList.contains('on'));
           });
         },
         general: () => {

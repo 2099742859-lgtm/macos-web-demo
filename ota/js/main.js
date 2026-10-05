@@ -112,13 +112,12 @@ function updateBatteryPct() {
   if (!b) return;
   let span = b.querySelector('.mb-pct');
   if (settings.showBattPct === false) { if (span) span.remove(); return; }
-  if (!span) {
-    span = document.createElement('span');
-    span.className = 'mb-pct';
-    span.style.cssText = 'font-size:11.5px;margin-right:3px';
-    b.prepend(span);
-  }
+  if (span) { span.textContent = batteryPct + '%'; return; }   /* 已存在只更新文本，不重排 */
+  span = document.createElement('span');
+  span.className = 'mb-pct';
+  span.style.cssText = 'font-size:11.5px;margin-right:3px';
   span.textContent = batteryPct + '%';
+  b.prepend(span);
 }
 
 /* ───────── 联网（在线天气 / 时间 / 测速） ───────── */
@@ -1023,9 +1022,33 @@ function toggleLaunchpad(show) {
   } else { lp.classList.add('hidden'); browserYield(false); }
 }
 function drawLaunchpad(filter) {
-  $('#lpGrid').innerHTML = LAUNCHPAD_APPS
-    .filter(id => APPS[id] && APPS[id].name.toLowerCase().includes(filter.toLowerCase()))
-    .map(id => `<div class="lp-app" data-app="${id}">${APPS[id].icon()}<span>${APPS[id].name}</span></div>`).join('');
+  const ids = LAUNCHPAD_APPS
+    .filter(id => APPS[id] && APPS[id].name.toLowerCase().includes(filter.toLowerCase()));
+  /* 按可用空间分页：每页容量 = 列数 × 行数 */
+  const cellW = 108, cellH = 118;
+  const cols = Math.max(3, Math.floor((stageW - 60) / cellW));
+  const rows = Math.max(2, Math.floor((stageH - 170) / cellH));
+  const perPage = cols * rows;
+  const pages = [];
+  for (let i = 0; i < ids.length; i += perPage) pages.push(ids.slice(i, i + perPage));
+  const lp = $('#lpGrid');
+  lp.innerHTML = pages.map(pg =>
+    `<div class="lp-page" style="grid-template-columns:repeat(${cols},1fr)">` +
+    pg.map(id => `<div class="lp-app" data-app="${id}">${APPS[id].icon()}<span>${APPS[id].name}</span></div>`).join('') +
+    `</div>`).join('');
+  /* 页点 */
+  const dots = $('#lpDots');
+  if (dots) {
+    dots.innerHTML = pages.length > 1 ? pages.map((_, i) => `<span class="lp-dot ${i === 0 ? 'on' : ''}" data-i="${i}"></span>`).join('') : '';
+    dots.querySelectorAll('.lp-dot').forEach(d => d.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      lp.scrollTo({ left: +d.dataset.i * lp.clientWidth, behavior: 'smooth' });
+    }));
+    lp.addEventListener('scroll', () => {
+      const cur = Math.round(lp.scrollLeft / lp.clientWidth);
+      dots.querySelectorAll('.lp-dot').forEach((d, i) => d.classList.toggle('on', i === cur));
+    }, { passive: true });
+  }
   $$('#lpGrid .lp-app').forEach(a => a.addEventListener('pointerdown', e => {
     e.stopPropagation();
     toggleLaunchpad(false);
@@ -1194,7 +1217,9 @@ async function aiChat(userText) {
 [SLEEP] 睡眠  [RESTART] 重启  [SHUTDOWN] 关机  [SWITCHER] App切换器
 [SPOTLIGHT:关键词] 聚焦搜索  [NOTIFY:内容] 发系统通知  [SCALE:80-140] 界面缩放
 [SEARCH:关键词] 联网搜索最新信息（新闻、实事、你不确定的知识都要搜）
-[SHELL:命令] 在终端执行 shell 命令（如 SHELL:ls -l、SHELL:mkdir 项目）；文件操作、下载、查信息都可以用终端完成`;
+[SHELL:命令] 在终端执行 shell 命令（如 SHELL:ls -l、SHELL:mkdir 项目）；文件操作、下载、查信息都可以用终端完成
+[CREATE:文件名|内容] 创建文件到桌面（如 CREATE:购物清单.txt|牛奶、鸡蛋）
+你也可以用 [SHELL:] 和 [CREATE:] 组合完成复杂文件任务`;
     const r = await apiFetch('https://api.hcnsec.cn/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
@@ -1214,6 +1239,13 @@ async function aiChat(userText) {
   finally { RATE.inFlight = false; }
 }
 /* ── 语音识别：MediaRecorder 录音 → 转 WAV → MiMo ASR ── */
+/* Siri 全局接口：任何应用/终端都可以调起 */
+window.Siri = {
+  ask: text => { openSiri(); setTimeout(() => siriAsk(text), 300); },
+  exec: text => siriAsk(text),   /* 不开界面直接执行 */
+  history: siriHist,
+};
+
 /* ── Exa 联网搜索（MCP，免 Key） ── */
 async function webSearch(q) {
   try {
@@ -1271,6 +1303,25 @@ function siriExec(reply) {
     openApp('terminal');
     setTimeout(() => { if (window.__termExec) window.__termExec(m[1]); }, 700);
   }, m => `终端执行「${m[1]}」`);
+  /* 创建文件：桌面/文稿 */
+  eat(/\[CREATE:([^|\]]+)\|([^\]]*)\]/, m => {
+    const name = m[1].trim(), content = m[2];
+    FILE_CONTENTS[name] = content;
+    const doc = VFS['文稿'] ? VFS['文稿'].children : null;
+    if (doc && !doc.includes(name)) doc.push(name);
+    saveFiles(); saveVFS();
+    /* 桌面快捷图标 */
+    if (/^桌面|desktop/i.test(name) || m[1].includes('桌面')) {
+      const realName = name.replace(/桌面\/?/i, '');
+      FILE_CONTENTS[realName] = content;
+      if (doc) { doc.splice(doc.indexOf(name), 1); if (!doc.includes(realName)) doc.push(realName); }
+      addDeskIcon(realName, 'icons/filetext.png', 'txt');
+      saveFiles(); saveVFS();
+    } else {
+      addDeskIcon(name, 'icons/filetext.png', 'txt');
+    }
+    notify('访达', `已创建「${name}」`);
+  }, m => `创建了文件「${m[1]}」`);
   eat(/\[NOTE:([^\]]+)\]/, m => {
     const notes = JSON.parse(localStorage.getItem('mac_notes') || '[]');
     notes.unshift({ t: m[1].slice(0, 12), b: m[1] });
