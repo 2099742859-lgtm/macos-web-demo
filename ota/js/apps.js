@@ -1255,8 +1255,8 @@ const APPS = {
             }
             lay.style.opacity = level;
           };
-          if (ttT) ttT.addEventListener('click', e => { settings.trueTone = saveSettings(); applyTint(); });
-          if (nsT) nsT.addEventListener('click', e => { settings.nightShift = saveSettings(); applyTint(); });
+          if (ttT) ttT.addEventListener('click', e => { settings.trueTone = e.currentTarget.classList.contains('on'); saveSettings(); applyTint(); });
+          if (nsT) nsT.addEventListener('click', e => { settings.nightShift = e.currentTarget.classList.contains('on'); saveSettings(); applyTint(); });
         },
         datetime: () => {
           const now = new Date();
@@ -1331,7 +1331,7 @@ const APPS = {
           /* 蓝牙开关（绑定在本页） */
           const btT = main.querySelector('#btTg');
           if (btT) btT.addEventListener('click', e => {
-            settings.btOn = saveSettings();
+            settings.btOn = e.currentTarget.classList.contains('on'); saveSettings();
             const bI = document.querySelector('#ccBt .cc-ico');
             if (bI) bI.classList.toggle('on', settings.btOn);
             notify('蓝牙', settings.btOn ? '蓝牙已打开' : '蓝牙已关闭');
@@ -1358,11 +1358,11 @@ const APPS = {
             row('允许通知', tog(settings.allowNotif !== false, 'notifTg')) + row('通知摘要', tog(!!settings.notifSummary, 'ns2Tg')) + row('锁定屏幕上显示', tog(settings.lockNotif !== false, 'lnTg')));
           bindToggles();
           const nTg = main.querySelector('#notifTg');
-          if (nTg) nTg.addEventListener('click', e => { settings.allowNotif = saveSettings(); });
+          if (nTg) nTg.addEventListener('click', e => { settings.allowNotif = e.currentTarget.classList.contains('on'); saveSettings(); });
           const ns2 = main.querySelector('#ns2Tg');
-          if (ns2) ns2.addEventListener('click', e => { settings.notifSummary = saveSettings(); });
+          if (ns2) ns2.addEventListener('click', e => { settings.notifSummary = e.currentTarget.classList.contains('on'); saveSettings(); });
           const lnT = main.querySelector('#lnTg');
-          if (lnT) lnT.addEventListener('click', e => { settings.lockNotif = saveSettings(); });
+          if (lnT) lnT.addEventListener('click', e => { settings.lockNotif = e.currentTarget.classList.contains('on'); saveSettings(); });
         },
         focus: () => {
           const modes = [['勿扰模式', 'moon', '#5E5CE6'], ['工作', 'doc', '#0A84FF'], ['个人', 'person', '#30B0C7'], ['睡眠', 'moon', '#30D158']];
