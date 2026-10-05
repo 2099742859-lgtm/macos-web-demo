@@ -1184,7 +1184,8 @@ async function aiChat(userText) {
 [NOTE:内容] 写进备忘录  [REMIND:内容] 加提醒事项  [TIMER:分钟数] 倒计时
 [MUSIC:关键词] 搜索播放音乐  [TRASH] 清空废纸篓  [LAUNCHPAD] 启动台
 [SLEEP] 睡眠  [RESTART] 重启  [SHUTDOWN] 关机  [SWITCHER] App切换器
-[SPOTLIGHT:关键词] 聚焦搜索  [NOTIFY:内容] 发系统通知  [SCALE:80-140] 界面缩放`;
+[SPOTLIGHT:关键词] 聚焦搜索  [NOTIFY:内容] 发系统通知  [SCALE:80-140] 界面缩放
+[SEARCH:关键词] 联网搜索最新信息（新闻、实事、你不确定的知识都要搜）`;
     const r = await apiFetch('https://api.hcnsec.cn/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
@@ -1255,6 +1256,26 @@ async function asrListenB64(b64) {
   const j = await r.json();
   return j.choices && j.choices[0] ? (j.choices[0].message.content || '').trim() : null;
 }
+/* ── Exa 联网搜索（MCP，免 Key） ── */
+async function webSearch(q) {
+  try {
+    const r = await apiFetch('https://mcp.exa.ai/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call',
+        params: { name: 'web_search_exa', arguments: { query: q, numResults: 3 } },
+      }),
+    }, 20000, 1);
+    const text = await r.text();
+    const m = text.match(/data: (\{.*\})/);
+    if (!m) return null;
+    const j = JSON.parse(m[1]);
+    const c = j.result && j.result.content && j.result.content[0];
+    return c ? c.text.slice(0, 1500) : null;
+  } catch (e) { return null; }
+}
+
 /* ── 动作执行（支持一次回复多个动作，返回执行记录供 Agent 循环） ── */
 function siriExec(reply) {
   let clean = reply;
@@ -1331,6 +1352,16 @@ async function siriAsk(text) {
     if (!reply) {
       $('#siriSub').textContent = !NET.online ? '离线了，先连网再聊' : '网络好像有点问题，稍后再试试';
       return;
+    }
+    /* 联网搜索：异步执行后带结果继续循环 */
+    const sm = reply.match(/\[SEARCH:([^\]]+)\]/);
+    if (sm) {
+      $('#siriSub').textContent = '正在联网搜索…';
+      const results = await webSearch(sm[1]);
+      siriHist.push({ role: 'assistant', content: reply.replace(sm[0], '').slice(0, 400) });
+      userMsg = `（搜索「${sm[1]}」的结果：\n${results || '没有结果，凭已有知识回答'}\n）根据结果回答用户「${text}」，简明扼要`;
+      round++;
+      continue;
     }
     const { clean, done } = siriExec(reply);
     finalReply = clean || finalReply;
