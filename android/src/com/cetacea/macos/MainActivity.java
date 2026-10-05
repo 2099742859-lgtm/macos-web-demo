@@ -22,6 +22,21 @@ import java.util.ArrayList;
 public class MainActivity extends Activity {
     private WebView web;
     private FrameLayout browserLayer;
+
+    /* 仅请求未授权的权限 */
+    void requestAllPerms() {
+        if (android.os.Build.VERSION.SDK_INT < 23) return;
+        String[] all = { "android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.ACCESS_COARSE_LOCATION", "android.permission.RECORD_AUDIO",
+            "android.permission.ACCESS_WIFI_STATE" };
+        java.util.List<String> need = new java.util.ArrayList<>();
+        for (String p : all)
+            if (checkSelfPermission(p) != android.content.pm.PackageManager.PERMISSION_GRANTED) need.add(p);
+        if (android.os.Build.VERSION.SDK_INT >= 31
+            && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            need.add("android.permission.BLUETOOTH_CONNECT");
+        if (!need.isEmpty()) requestPermissions(need.toArray(new String[0]), 1);
+    }
     private android.webkit.ValueCallback<android.net.Uri[]> fileCallback;
 
     @Override
@@ -99,17 +114,7 @@ public class MainActivity extends Activity {
                 web.evaluateJavascript("window.__dlNotify && window.__dlNotify('" + fn.replace("'", "") + "')", null);
             } catch (Exception ignored) {}
         });
-        if (android.os.Build.VERSION.SDK_INT >= 23) {
-            java.util.List<String> perms = new java.util.ArrayList<>();
-            perms.add("android.permission.CAMERA");
-            perms.add("android.permission.ACCESS_FINE_LOCATION");
-            perms.add("android.permission.ACCESS_COARSE_LOCATION");
-            perms.add("android.permission.RECORD_AUDIO");
-            perms.add("android.permission.ACCESS_WIFI_STATE");
-            if (android.os.Build.VERSION.SDK_INT >= 31)
-                perms.add("android.permission.BLUETOOTH_CONNECT");
-            requestPermissions(perms.toArray(new String[0]), 1);
-        }
+        requestAllPerms();
         setContentView(w);
         web = w;
         /* 刘海全屏：内容延伸到摄像头开孔区域 */
@@ -397,6 +402,29 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean isUpdated() {
             return new java.io.File(getFilesDir(), "web/index.html").exists();
+        }
+
+        /* 权限自检与引导 */
+        @JavascriptInterface
+        public boolean hasPermission(String p) {
+            return android.os.Build.VERSION.SDK_INT < 23
+                || checkSelfPermission("android.permission." + p) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        }
+
+        @JavascriptInterface
+        public void requestPerms() {
+            runOnUiThread(MainActivity.this::requestAllPerms);
+        }
+
+        @JavascriptInterface
+        public void openAppSettings() {
+            try {
+                android.content.Intent i = new android.content.Intent(
+                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:" + getPackageName()));
+                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+            } catch (Exception ignored) {}
         }
 
         /* 跳转系统 WiFi/蓝牙设置 */

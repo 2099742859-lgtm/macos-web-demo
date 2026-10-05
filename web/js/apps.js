@@ -171,6 +171,7 @@ const APPS = {
       }
       function openFile(name) {
         if (VFS[name]) { path.push(name); pushHist(); draw(); }
+        else if (window.isTextFile && isTextFile(name)) openApp('textedit', { file: name });
         else quickLook(name);
       }
       function pushHist() { hist = hist.slice(0, hi + 1); hist.push(path.slice()); hi = hist.length - 1; }
@@ -1274,10 +1275,10 @@ const APPS = {
         },
         update: () => {
           main.innerHTML = `<h2>软件更新</h2>
-          <div class="upd-glass" id="updGlass">
-            <div class="upd-gear-big">⚙️</div>
-            <div class="upd-title">macOS</div>
-            <div class="upd-ver">当前版本 ${APP_VER.name}（${APP_VER.code}）${window.AndroidBridge && AndroidBridge.isUpdated && AndroidBridge.isUpdated() ? ' · <span style="color:#30d158">OTA 增强版</span>' : ''}</div>
+          <div class="upd-hero" id="updGlass">
+            <div class="upd-gear-big">${GLYPH.gearBig}</div>
+            <div class="upd-title">macOS Sequoia</div>
+            <div class="upd-ver">当前版本 ${APP_VER.name}${window.AndroidBridge && AndroidBridge.isUpdated && AndroidBridge.isUpdated() ? ' · <span style="color:#30d158">OTA 增强版</span>' : ''}</div>
             <div class="upd-btn" id="updCheck">检查更新</div>
             <div class="upd-status" id="updStatus"></div>
           </div>
@@ -1304,10 +1305,10 @@ const APPS = {
               return;
             }
             status.innerHTML = `<div style="color:#ff9f0a;font-size:14px;margin-top:10px">发现新版本</div>` + report;
-            detail.innerHTML = `<div class="upd-glass" style="margin-top:12px">
+            detail.innerHTML = `<div class="upd-card" style="margin-top:12px">
               <div class="upd-new">${remote.name}${force ? ' <span style="color:#ff3b30;font-size:12px">（必须更新）</span>' : ''}</div>
               <div class="upd-notes">${(remote.notes || []).map(n => `· ${n}`).join('<br>')}</div>
-              <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+              <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
                 <div class="upd-btn" id="updGo">立即更新</div>
                 ${force ? '' : '<div class="upd-btn ghost" id="updSkip">忽略此版本</div>'}
               </div>
@@ -1330,9 +1331,16 @@ const APPS = {
                   fill.style.width = (p * 100).toFixed(0) + '%';
                   pct.textContent = label + ' · ' + (p * 100).toFixed(0) + '%';
                 });
-                const sizeTxt = r && r.bytes ? `（增量 ${(r.bytes / 1024).toFixed(0)} KB / ${r.count} 个文件）` : '';
-                pct.textContent = `✓ 更新完成 ${sizeTxt}，2 秒后自动重启…`;
-                setTimeout(() => location.reload(), 2000);
+                const sizeTxt = r && r.bytes ? `增量 ${(r.bytes / 1024).toFixed(0)} KB / ${r.count} 个文件` : '';
+                /* 更新完成 → 主人手动点重启 */
+                prog.style.display = 'none';
+                pct.classList.add('hidden');
+                detail.querySelector('.upd-new').innerHTML = `✓ ${remote.name} 已就绪`;
+                detail.querySelector('.upd-notes').innerHTML = `<span style="color:#888;font-size:12.5px">${sizeTxt}，重启后生效</span>`;
+                const btnWrap = detail.querySelector('.upd-card div[style*="display:flex"]');
+                btnWrap.innerHTML = `<div class="upd-btn restart" id="updRestart">现在重启</div><div class="upd-btn ghost" id="updLater">稍后</div>`;
+                detail.querySelector('#updRestart').addEventListener('click', () => location.reload());
+                detail.querySelector('#updLater').addEventListener('click', () => notify('软件更新', '更新已就绪，重启应用后生效'));
               } catch (e) {
                 pct.textContent = '✗ 更新失败：' + e.message;
                 go.style.display = ''; go.textContent = '重试';
@@ -1544,10 +1552,11 @@ const APPS = {
   reminders: {
     name: '提醒事项', icon: () => ICONS.reminders(), w: 460, h: 420,
     render(el) {
-      const items = [
+      const items = JSON.parse(localStorage.getItem('mac_reminders') || 'null') || [
         ['买牛奶', false], ['给妈妈打电话', false], ['周五提交报告', true],
         ['健身 30 分钟', false], ['还图书馆的书', true],
       ];
+      const saveRem = () => localStorage.setItem('mac_reminders', JSON.stringify(items));
       el.innerHTML = `<div class="rem"><h1>今天</h1>
         <div class="rem-count" id="remCnt"></div>
         ${items.map((it, i) => `<div class="rem-row ${it[1] ? 'done' : ''}" data-i="${i}">
@@ -1559,6 +1568,8 @@ const APPS = {
       el.querySelectorAll('.rem-row').forEach(r => r.addEventListener('click', () => {
         r.classList.toggle('done');
         r.querySelector('.rem-c').textContent = r.classList.contains('done') ? '✓' : '';
+        items[+r.dataset.i][1] = r.classList.contains('done');
+        saveRem();
         update();
       }));
       update();
@@ -1735,13 +1746,69 @@ const APPS = {
   },
 
   /* ─── 文本编辑 ─── */
+  /* ─── 文本编辑（真·文件编辑：可打开/编辑/保存） ─── */
   textedit: {
     name: '文本编辑', icon: () => ICONS.textedit(), w: 560, h: 420,
-    render(el) {
-      el.innerHTML = `<textarea class="te-area" style="flex:1;border:none;outline:none;resize:none;padding:18px 22px;font:15px/1.7 var(--font);background:transparent;color:inherit" placeholder="随手写点什么…"></textarea>`;
-      const ta = el.querySelector('.te-area');
-      ta.value = localStorage.getItem('mac_textedit') || '';
-      ta.addEventListener('input', () => localStorage.setItem('mac_textedit', ta.value));
+    render(el, win, arg) {
+      let file = arg && arg.file || null;
+      el.innerHTML = `<div style="flex:1;display:flex;flex-direction:column">
+        <div class="te-bar">
+          <span class="te-file" id="teFile">${file || '未命名'}</span>
+          <span style="flex:1"></span>
+          <span class="pill-btn" id="teOpen">打开…</span>
+          <span class="pill-btn" id="teSaveAs">另存为</span>
+          <span class="pill-btn on" id="teSave">保存</span>
+        </div>
+        <textarea class="te-area" id="teArea" placeholder="随手写点什么…" spellcheck="false"></textarea></div>`;
+      const ta = el.querySelector('#teArea');
+      const fileEl = el.querySelector('#teFile');
+      ta.value = file ? (FILE_CONTENTS[file] || '') : (localStorage.getItem('mac_textedit') || '');
+      const isText = n => /\.(txt|md|markdown|js|css|html|json|csv|log|xml|sh|py)$/i.test(n) || (FILE_CONTENTS[n] != null && typeof FILE_CONTENTS[n] === 'string' && !FILE_CONTENTS[n].startsWith('@idb:'));
+      function save() {
+        if (file) {
+          FILE_CONTENTS[file] = ta.value;
+          saveFiles();
+          notify('文本编辑', `「${file}」已存储`);
+        } else {
+          localStorage.setItem('mac_textedit', ta.value);
+          notify('文本编辑', '草稿已存储（未关联文件，可另存为）');
+        }
+      }
+      el.querySelector('#teSave').addEventListener('click', save);
+      el.querySelector('#teSaveAs').addEventListener('click', () => {
+        const name = prompt('存储为文件名：', file || '未命名.txt');
+        if (!name) return;
+        file = name;
+        FILE_CONTENTS[file] = ta.value;
+        const doc = VFS['文稿'] ? VFS['文稿'].children : null;
+        if (doc && !doc.includes(file)) doc.push(file);
+        saveFiles(); saveVFS();
+        fileEl.textContent = file;
+        notify('文本编辑', `已存储到 文稿/${file}`);
+      });
+      el.querySelector('#teOpen').addEventListener('click', () => {
+        const texts = [];
+        Object.keys(FILE_CONTENTS).forEach(n => { if (isText(n)) texts.push(n); });
+        if (!texts.length) return notify('文本编辑', '没有可编辑的文本文件');
+        const ctx = $('#ctxMenu');
+        ctx.innerHTML = texts.slice(0, 12).map(n => `<div class="ctx-item" data-n="${n}">${n}</div>`).join('');
+        const r = el.getBoundingClientRect();
+        ctx.style.left = (r.left + 90) + 'px';
+        ctx.style.top = (r.top + 60) + 'px';
+        ctx.classList.remove('hidden');
+        ctx.querySelectorAll('.ctx-item').forEach(it => it.addEventListener('pointerdown', ev => {
+          ev.stopPropagation();
+          ctx.classList.add('hidden');
+          file = it.dataset.n;
+          ta.value = FILE_CONTENTS[file] || '';
+          fileEl.textContent = file;
+        }));
+      });
+      /* ⌘S 保存 */
+      el.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save(); }
+      });
+      ta.addEventListener('input', () => { if (!file) localStorage.setItem('mac_textedit', ta.value); });
     }
   },
 
@@ -2077,6 +2144,16 @@ const APPS = {
           }, 500);
         } catch (err) {
           notify('语音备忘录', '无法访问麦克风');
+          if (window.AndroidBridge && AndroidBridge.hasPermission && !AndroidBridge.hasPermission('RECORD_AUDIO')) {
+            notify('语音备忘录', '没有麦克风权限，点我去开启');
+            setTimeout(() => {
+              const b = document.querySelector('#banners .banner');
+              if (b) b.addEventListener('pointerdown', () => {
+                AndroidBridge.requestPerms();
+                setTimeout(() => { if (!AndroidBridge.hasPermission('RECORD_AUDIO')) AndroidBridge.openAppSettings(); }, 1500);
+              });
+            }, 100);
+          }
         }
       });
       if (win) win._cleanup = () => { if (stream) stream.getTracks().forEach(t => t.stop()); clearInterval(tickIv); };

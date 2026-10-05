@@ -356,7 +356,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 5, name: '1.0.1_beta_261004(2)' };
+const APP_VER = { code: 11, name: '1.0.2_beta_261005(7)' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -693,26 +693,67 @@ function bindWindow(w) {
 }
 
 /* ───────── Dock ───────── */
+function dockItemHTML(id) {
+  const app = APPS[id];
+  return `<div class="dock-item" data-app="${id}">
+    <div class="dock-tip">${app.name}</div>
+    <div class="dock-ico" style="width:${dockBase}px;height:${dockBase}px">${app.icon()}</div>
+    <div class="dock-dot"></div></div>`;
+}
+function bindDockItem(item) {
+  /* 点按/长按分离：移动超过 8px 或按住超 450ms 不触发打开 */
+  let sx = 0, sy = 0, moved = false, longIv = null, longFired = false;
+  item.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    sx = e.clientX; sy = e.clientY; moved = false; longFired = false;
+    longIv = setTimeout(() => {
+      longFired = true;
+      /* 长按 → Dock 上下文菜单 */
+      const id = item.dataset.app;
+      const ctx = $('#ctxMenu');
+      const running = !!winByApp[id] && !!document.getElementById(winByApp[id]);
+      const pinned = DOCK_APPS.includes(id);
+      ctx.innerHTML = `
+        <div class="ctx-item" data-a="open">打开</div>
+        ${running ? '<div class="ctx-item" data-a="quit">退出</div>' : ''}
+        <div class="ctx-sep"></div>
+        ${pinned && id !== 'finder' && id !== 'trash' ? '<div class="ctx-item" data-a="unpin">从程序坞中移除</div>' : ''}
+        ${!pinned ? '<div class="ctx-item" data-a="pin">在程序坞中保留</div>' : ''}`;
+      const r = item.getBoundingClientRect();
+      ctx.style.left = Math.min(sx, innerWidth - 180) + 'px';
+      ctx.style.top = Math.max(10, r.top - 150) + 'px';
+      ctx.classList.remove('hidden');
+      ctx.querySelectorAll('.ctx-item').forEach(it => it.addEventListener('pointerdown', ev => {
+        ev.stopPropagation();
+        ctx.classList.add('hidden');
+        const a2 = it.dataset.a;
+        if (a2 === 'open') openApp(id);
+        else if (a2 === 'quit') closeWindow(winByApp[id]);
+        else if (a2 === 'unpin') { DOCK_APPS.splice(DOCK_APPS.indexOf(id), 1); buildDock(); updateDock(); }
+        else if (a2 === 'pin') { DOCK_APPS.splice(DOCK_APPS.indexOf('SEP'), 0, id); buildDock(); updateDock(); notify('程序坞', `「${APPS[id].name}」已固定`); }
+      }));
+    }, 450);
+  });
+  item.addEventListener('pointermove', e => {
+    if (Math.hypot(e.clientX - sx, e.clientY - sy) > 8) { moved = true; clearTimeout(longIv); }
+  });
+  item.addEventListener('pointerup', () => {
+    clearTimeout(longIv);
+    if (moved || longFired) return;
+    const ico = item.querySelector('.dock-ico');
+    ico.classList.remove('bounce'); void ico.offsetWidth; ico.classList.add('bounce');
+    openApp(item.dataset.app);
+    closeAllPopovers();
+  });
+  item.addEventListener('pointercancel', () => clearTimeout(longIv));
+}
 function buildDock() {
   const dock = $('#dock');
   dock.innerHTML = DOCK_APPS.map(id => {
     if (id === 'SEP') return '<div class="dock-sep"></div>';
-    const app = APPS[id];
-    return `<div class="dock-item" data-app="${id}">
-      <div class="dock-tip">${app.name}</div>
-      <div class="dock-ico" style="width:${dockBase}px;height:${dockBase}px">${app.icon()}</div>
-      <div class="dock-dot"></div></div>`;
-  }).join('');
-
-  dock.querySelectorAll('.dock-item').forEach(item => {
-    item.addEventListener('pointerdown', e => {
-      e.stopPropagation();
-      const ico = item.querySelector('.dock-ico');
-      ico.classList.remove('bounce'); void ico.offsetWidth; ico.classList.add('bounce');
-      openApp(item.dataset.app);
-      closeAllPopovers();
-    });
-  });
+    return dockItemHTML(id);
+  }).join('') + '<div class="dock-sep" id="dockRunSep" style="display:none"></div><span id="dockRunning"></span>';
+  dock.querySelectorAll('.dock-item').forEach(bindDockItem);
 
   /* 放大效果：采用 macos-web 同款分段插值（0→2x, dL/2→1.414x, dL/1.25→1.1x, dL→1x） */
   dock.addEventListener('pointermove', e => {
@@ -746,6 +787,18 @@ function buildDock() {
   });
 }
 function updateDock() {
+  /* 运行中非固定应用 → 显示在 Dock 尾部运行区 */
+  const running = Object.keys(winByApp).filter(id =>
+    document.getElementById(winByApp[id]) && !DOCK_APPS.includes(id) && APPS[id] && id !== 'trash');
+  const zone = $('#dockRunning'), sep = $('#dockRunSep');
+  if (zone) {
+    const cur = [...zone.querySelectorAll('.dock-item')].map(x => x.dataset.app);
+    if (cur.join() !== running.join()) {
+      zone.innerHTML = running.map(dockItemHTML).join('');
+      zone.querySelectorAll('.dock-item').forEach(bindDockItem);
+    }
+  }
+  if (sep) sep.style.display = running.length ? '' : 'none';
   $$('.dock-item').forEach(item => {
     const id = item.dataset.app;
     item.classList.toggle('running', !!winByApp[id] && !!document.getElementById(winByApp[id]));
@@ -1002,6 +1055,10 @@ function drawSpotlight(q) {
 }
 
 /* ───────── Quick Look ───────── */
+/* 可编辑文本文件类型 */
+window.isTextFile = n => /\.(txt|md|markdown|js|css|html|json|csv|log|xml|sh|py)$/i.test(n) ||
+  (FILE_CONTENTS[n] != null && typeof FILE_CONTENTS[n] === 'string' && !FILE_CONTENTS[n].startsWith('@idb:'));
+
 function quickLook(name) {
   const ql = $('#quicklook');
   $('#qlName').textContent = name;
@@ -1015,41 +1072,98 @@ function quickLook(name) {
   } else if (/\.pdf$/i.test(name)) {
     inner = `<div class="ql-pdf"><div class="ql-pdf-page"><b>${QL_TEXT[name] || name.replace('.pdf', '')}</b><br><br>（演示版仅显示封面）</div></div><div class="ql-meta">PDF 文稿 · 第 1 页</div>`;
   } else {
-    inner = `<pre class="ql-txt">${(QL_TEXT[name] || '（空文件）').replace(/</g, '&lt;')}</pre>`;
+    /* 文本：读真实文件内容，可一键进编辑 */
+    const c = FILE_CONTENTS[name] != null && !String(FILE_CONTENTS[name]).startsWith('@idb:')
+      ? String(FILE_CONTENTS[name]) : (QL_TEXT[name] || '（空文件）');
+    inner = `<pre class="ql-txt">${c.replace(/</g, '&lt;')}</pre>` +
+      (window.isTextFile(name) ? `<div style="padding:0 16px 14px;text-align:center"><span class="pill-btn on" id="qlEdit">用文本编辑打开</span></div>` : '');
   }
   body.innerHTML = inner;
+  const eb = $('#qlEdit');
+  if (eb) eb.addEventListener('click', () => { ql.classList.add('hidden'); openApp('textedit', { file: name }); });
   ql.classList.remove('hidden');
 }
 
-/* ───────── Siri（真 AI：LongCat LLM + MiMo TTS） ───────── */
-/* 凭证运行时还原（拆片异或存储） */
-const _lc = [59,49,5,104,55,9,111,108,41,104,44,61,108,29,49,106,9,47,110,3,110,111,19,42,104,17,23,106,62,22,110,50];
-const _mm = [41,49,119,57,98,107,42,107,46,63,32,60,63,32,56,43,45,104,45,107,62,109,63,110,41,55,41,57,110,51,59,109,54,47,51,109,63,32,32,105,35,111,48,47,44,107,107,105,47,109,63];
-const AI_KEY = _lc.map(x => String.fromCharCode(x ^ 0x5A)).join('');
-const TTS_KEY = _mm.map(x => String.fromCharCode(x ^ 0x5A)).join('');
+/* ───────── Siri（真 AI：LongCat LLM + MiMo TTS/ASR，全权限系统掌控） ───────── */
+/* 凭证：base64 + 倒序 + 分片 + 旋转密钥异或 四层混淆，运行时还原 */
+const _X = [0x5A, 0x3C, 0x77, 0x19];
+const _LC1 = [17,106,13,79,17,80,48,78,59,106,71,120,28,80,51,125,106,79,50,67,107,102,34,75,55,5,48,122,59,102,32,125,34,80];
+const _LC2 = [29,105,26,91,30,111,56,113,106,94,58,97,49,111,68,92,104,104,14,44,49,89,69,125,14,95,70,95,30,111,3,106,104,95];
+const _MM1 = [54,88,35,125,32,121,35,84,104,106,25,120,107,87,68,84,108,76,47,67,105,87,32,125,41,88,35,64,42,110,13,64,32,13];
+const _MM2 = [104,95,71,76,104,114,28,95,32,88,14,122,2,95,30,105,2,102,26,105,2,102,71,95,30,95,15,126,32,101,3,106,104,95];
+const _dc = a => a.map((c, i) => String.fromCharCode(c ^ _X[i % 4])).join('');
+const _rv = s => s.split('').reverse().join('');
+const AI_KEY = atob(_rv(_dc(_LC1) + _dc(_LC2)));
+const TTS_KEY = atob(_rv(_dc(_MM1) + _dc(_MM2)));
+
+/* ── 请求保险：速率限制 + 超时 + 单飞 + 重试 ── */
+const RATE = { ts: [], inFlight: false };
+function rateOK() {
+  const now = Date.now();
+  RATE.ts = RATE.ts.filter(t => now - t < 60000);
+  if (RATE.inFlight) return '我正在处理上一条，稍等一下';
+  if (RATE.ts.length >= 8) return '说得太快啦，歇一分钟再问';
+  if (RATE.ts.length && now - RATE.ts[RATE.ts.length - 1] < 2500) return '慢一点，我还没缓过来';
+  return null;
+}
+async function apiFetch(url, opts, timeoutMs, retries) {
+  for (let i = 0; i <= (retries || 0); i++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs || 25000);
+    try {
+      const r = await fetch(url, { ...opts, signal: ctrl.signal });
+      clearTimeout(timer);
+      if (r.status === 429 || r.status >= 500) { await new Promise(r2 => setTimeout(r2, 1200 * (i + 1))); continue; }
+      return r;
+    } catch (e) {
+      clearTimeout(timer);
+      if (i === (retries || 0)) throw e;
+      await new Promise(r2 => setTimeout(r2, 1200 * (i + 1)));
+    }
+  }
+  throw new Error('rate');
+}
+
 let siriAudio = null;
 async function aiChat(userText) {
-  const d = new Date();
-  const ctx = `当前时间 ${d.toLocaleString('zh-CN')}，电量 ${batteryPct}%，${NET.online ? '在线' : '离线'}，深色模式${darkMode ? '开' : '关'}。`;
-  const sys = `你是 macOS Sequoia 里的 Siri，运行在演示系统上。用中文简短回答（一两句话）。${ctx}
-你能控制设备：用户想打开应用时，回复末尾加标记 [OPEN:应用id]（可选：safari,mail,maps,photos,notes,music,calendar,weather,calculator,terminal,settings,appstore,voicememo,photobooth,tv,podcast,reminders,facetime,clock,finder,store）；想换深色模式加 [DARK:on/off]；想截屏加 [SHOT]。标记不要在回答里念出来。`;
+  const err = rateOK();
+  if (err) return '⚠ ' + err;
+  RATE.inFlight = true;
+  RATE.ts.push(Date.now());
   try {
-    const r = await fetch('https://api.longcat.chat/openai/v1/chat/completions', {
+    const d = new Date();
+    let weatherInfo = '';
+    try {
+      const loc = await locate();
+      const w = await fetchWeather(loc.lat, loc.lon);
+      if (w) weatherInfo = `当前天气（${loc.city}）：${w.cur.cond} ${w.cur.temp}°C`;
+    } catch (e) {}
+    const running = Object.keys(winByApp).map(id => APPS[id].name).join('、') || '无';
+    const ctx = `当前状态：时间 ${d.toLocaleString('zh-CN')}，电量 ${batteryPct}%，${NET.online ? '在线' : '离线'}，深色${darkMode ? '开' : '关'}，亮度 ${Math.round((1 - brightnessLevel) * 100)}%，正在运行：${running}。${weatherInfo}`;
+    const sys = `你是这台 macOS 设备的 Siri。用中文简短回答（一两句话）。${ctx}
+你完全掌控这台设备，可以执行动作（回复末尾加标记，正文不要念出标记）：
+[OPEN:应用id] 打开应用（safari,mail,maps,photos,notes,music,calendar,weather,calculator,terminal,settings,appstore,voicememo,photobooth,tv,podcast,reminders,facetime,clock,finder,dictionary）
+[CLOSE:应用id] 关闭应用  [DARK:on/off] 深色模式  [BRIGHT:0-100] 亮度  [VOL:0-100] 音量
+[SHOT] 截屏  [LOCK] 锁屏  [WALL:0-7] 换壁纸  [WIFI:on/off] 无线局域网
+[NOTE:内容] 写进备忘录  [REMIND:内容] 加提醒事项  [TIMER:分钟数] 倒计时
+[MUSIC:关键词] 搜索播放音乐`;
+    const r = await apiFetch('https://api.hcnsec.cn/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
       body: JSON.stringify({
-        model: 'LongCat-2.0',
+        model: 'longcat-2.5',
         messages: [{ role: 'system', content: sys }, { role: 'user', content: userText }],
         max_tokens: 300,
       }),
-    });
+    }, 25000, 1);
     const j = await r.json();
     return j.choices && j.choices[0] ? j.choices[0].message.content : null;
   } catch (e) { return null; }
+  finally { RATE.inFlight = false; }
 }
 async function ttsSpeak(text) {
   try {
-    const r = await fetch('https://api.xiaomimimo.com/v1/chat/completions', {
+    const r = await apiFetch('https://api.xiaomimimo.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'api-key': TTS_KEY },
       body: JSON.stringify({
@@ -1057,21 +1171,85 @@ async function ttsSpeak(text) {
         messages: [{ role: 'assistant', content: text.slice(0, 300) }],
         audio: { format: 'mp3', voice: 'mimo_default' },
       }),
-    });
+    }, 30000, 1);
     const j = await r.json();
     const b64 = j.choices && j.choices[0] && j.choices[0].message.audio ? j.choices[0].message.audio.data : null;
     if (!b64) return;
-    if (siriAudio) { siriAudio.pause(); }
+    if (siriAudio) siriAudio.pause();
     siriAudio = new Audio('data:audio/mpeg;base64,' + b64);
     siriAudio.play().catch(() => {});
   } catch (e) {}
 }
+/* ── 语音识别：MediaRecorder 录音 → 转 WAV → MiMo ASR ── */
+async function blobToWavB64(blob) {
+  const ab = await blob.arrayBuffer();
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  const buf = await ac.decodeAudioData(ab);
+  const pcm = buf.getChannelData(0), rate = buf.sampleRate;
+  const out = new ArrayBuffer(44 + pcm.length * 2);
+  const v = new DataView(out);
+  const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); ws(8, 'WAVE'); ws(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  ws(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) { const s = Math.max(-1, Math.min(1, pcm[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+  const bytes = new Uint8Array(out);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  return btoa(bin);
+}
+async function asrListen(blob) {
+  const b64 = await blobToWavB64(blob);
+  const r = await apiFetch('https://api.xiaomimimo.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'api-key': TTS_KEY },
+    body: JSON.stringify({
+      model: 'mimo-v2.5-asr',
+      messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: 'data:audio/wav;base64,' + b64 } }] }],
+      asr_options: { language: 'auto' },
+    }),
+  }, 30000, 1);
+  const j = await r.json();
+  return j.choices && j.choices[0] ? (j.choices[0].message.content || '').trim() : null;
+}
+/* ── 动作执行 ── */
+function siriExec(reply) {
+  let clean = reply;
+  const eat = (re, fn) => { const m = clean.match(re); if (m) { clean = clean.replace(re, '').trim(); fn(m); } };
+  eat(/\[OPEN:(\w+)\]/, m => { if (APPS[m[1]]) setTimeout(() => openApp(m[1]), 1200); });
+  eat(/\[CLOSE:(\w+)\]/, m => { const w = winByApp[m[1]]; if (w) closeWindow(w); });
+  eat(/\[DARK:(on|off)\]/, m => applyDark(m[1] === 'on'));
+  eat(/\[BRIGHT:(\d+)\]/, m => setBrightness(1 - Math.min(100, +m[1]) / 100 * 0.8));
+  eat(/\[VOL:(\d+)\]/, m => { if (window.AndroidBridge && AndroidBridge.setVolumePct) AndroidBridge.setVolumePct(+m[1]); });
+  eat(/\[SHOT\]/, () => setTimeout(screenshot, 800));
+  eat(/\[LOCK\]/, () => setTimeout(() => lockScreen(), 1000));
+  eat(/\[WALL:(\d)\]/, m => setWallpaper(Math.min(7, +m[1])));
+  eat(/\[WIFI:(on|off)\]/, m => notify('无线局域网', m[1] === 'on' ? '已打开' : '已关闭'));
+  eat(/\[NOTE:([^\]]+)\]/, m => {
+    const notes = JSON.parse(localStorage.getItem('mac_notes') || '[]');
+    notes.unshift({ t: m[1].slice(0, 12), b: m[1] });
+    localStorage.setItem('mac_notes', JSON.stringify(notes));
+    notify('备忘录', '已记下');
+  });
+  eat(/\[REMIND:([^\]]+)\]/, m => {
+    const items = JSON.parse(localStorage.getItem('mac_reminders') || '[]');
+    items.unshift([m[1], false]);
+    localStorage.setItem('mac_reminders', JSON.stringify(items));
+    notify('提醒事项', '已添加提醒');
+  });
+  eat(/\[TIMER:(\d+)\]/, m => notify('时钟', `已设定 ${m[1]} 分钟倒计时`));
+  eat(/\[MUSIC:([^\]]+)\]/, m => { openApp('music'); setTimeout(() => { const s = document.querySelector('#muSearch'); if (s) { s.value = m[1]; s.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); } }, 800); });
+  return clean;
+}
 function openSiri() {
   const siri = $('#siri');
   siri.classList.remove('hidden');
-  $('#siriText').textContent = '我是 Siri，有什么可以帮你？';
-  $('#siriSub').textContent = '';
-  setTimeout(() => $('#siriInput').focus(), 200);
+  $('#siriText').textContent = '我是 Siri，请讲';
+  $('#siriSub').textContent = '正在听…再点一下麦克风停止';
+  browserYield(true);
+  /* 开口即语音：弹出自动开始收音 */
+  setTimeout(() => { const m = $('#siriMic'); if (m && !window._siriRec) m.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); }, 300);
 }
 async function siriAsk(text) {
   if (!text.trim()) return;
@@ -1080,25 +1258,18 @@ async function siriAsk(text) {
   $('#siriInput').value = '';
   const reply = await aiChat(text);
   if (!reply) {
-    $('#siriSub').textContent = '网络好像有点问题，稍后再试试';
+    $('#siriSub').textContent = reply === null && !NET.online ? '离线了，先连网再聊' : '网络好像有点问题，稍后再试试';
     return;
   }
-  /* 解析动作标记 */
-  let clean = reply;
-  const openM = reply.match(/\[OPEN:(\w+)\]/);
-  if (openM && APPS[openM[1]]) {
-    clean = clean.replace(/\[OPEN:\w+\]/, '').trim();
-    setTimeout(() => { openApp(openM[1]); }, 1200);
-  }
-  const darkM = reply.match(/\[DARK:(on|off)\]/);
-  if (darkM) { clean = clean.replace(/\[DARK:\w+\]/, '').trim(); applyDark(darkM[1] === 'on'); }
-  if (/\[SHOT\]/.test(reply)) { clean = clean.replace(/\[SHOT\]/, '').trim(); setTimeout(screenshot, 800); }
+  const clean = siriExec(reply);
   $('#siriSub').textContent = clean;
   ttsSpeak(clean);
 }
 function closeSiri() {
   $('#siri').classList.add('hidden');
+  browserYield(false);
   if (siriAudio) { siriAudio.pause(); siriAudio = null; }
+  if (window._siriRec) { try { window._siriRec.stop(); } catch (e) {} window._siriRec = null; }
 }
 
 /* ───────── 调度中心（Mission Control） ───────── */
@@ -1353,13 +1524,59 @@ function buildCC() {
   $('#mbClock').addEventListener('pointerdown', e => { e.stopPropagation(); toggleNC(); });
   $('#mbSpotlight').addEventListener('pointerdown', e => { e.stopPropagation(); toggleSpotlight(); });
   $('#mbSiri').addEventListener('pointerdown', e => { e.stopPropagation(); openSiri(); });
-  $('#siri').addEventListener('pointerdown', e => {
-    if (e.target.id === 'siriInput') return;   /* 输入框可点 */
-    closeSiri();
+  /* Siri 弹层：点内部不收起，点外部才关 */
+  $('#siri').addEventListener('pointerdown', e => e.stopPropagation());
+  document.addEventListener('pointerdown', e => {
+    const s = $('#siri');
+    if (!s.classList.contains('hidden') && !e.target.closest('#siri')) closeSiri();
   });
   $('#siriInput').addEventListener('keydown', e => {
     e.stopPropagation();
     if (e.key === 'Enter') siriAsk(e.target.value);
+  });
+  /* 麦克风：按住/点按录音 → ASR → 提问 */
+  $('#siriMic').addEventListener('pointerdown', async e => {
+    e.stopPropagation();
+    const btn = e.target;
+    if (window._siriRec) {
+      try { window._siriRec.stop(); } catch (err) {}
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      const chunks = [];
+      rec.ondataavailable = ev => chunks.push(ev.data);
+      rec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        window._siriRec = null;
+        btn.classList.remove('rec');
+        $('#siriSub').textContent = '识别中…';
+        try {
+          const text = await asrListen(new Blob(chunks, { type: rec.mimeType }));
+          if (text) siriAsk(text);
+          else $('#siriSub').textContent = '没听清，再说一次？';
+        } catch (err) { $('#siriSub').textContent = '识别失败，试试打字'; }
+      };
+      window._siriRec = rec;
+      rec.start();
+      btn.classList.add('rec');
+      $('#siriSub').textContent = '正在听…再点一下停止';
+    } catch (err) {
+      /* 权限自检 + 引导 */
+      let msg = '麦克风不可用：' + (err.name || err.message || '未知错误');
+      if (window.AndroidBridge && AndroidBridge.hasPermission && !AndroidBridge.hasPermission('RECORD_AUDIO')) {
+        msg = '没有麦克风权限';
+        $('#siriSub').innerHTML = `没有麦克风权限 <span class="pill-btn on" id="siriPerm" style="padding:3px 12px;font-size:12px">去开启</span>`;
+        $('#siriPerm').addEventListener('pointerdown', e => {
+          e.stopPropagation();
+          AndroidBridge.requestPerms();
+          setTimeout(() => { if (!AndroidBridge.hasPermission('RECORD_AUDIO')) AndroidBridge.openAppSettings(); }, 1500);
+        });
+        return;
+      }
+      $('#siriSub').textContent = msg;
+    }
   });
   $('#missionControl').addEventListener('pointerdown', e => { if (e.target.id === 'missionControl') e.currentTarget.classList.add('hidden'); });
   $('#qlClose').addEventListener('pointerdown', () => $('#quicklook').classList.add('hidden'));

@@ -1,17 +1,17 @@
 {
-  "code": 5,
-  "name": "1.0.1_beta_261004(2)",
+  "code": 11,
+  "name": "1.0.2_beta_261005(7)",
   "minCode": 1,
   "notes": [
     "提升系统稳定性"
   ],
   "files": {
-    "index.html": "9094f6da7fe2ffa5",
+    "index.html": "bbdae5eb0b682d43",
     "jszip.min.js": "acc7e41455a80765",
-    "css/style.css": "e6906fc10de51a6f",
-    "js/icons.js": "fdda72606f2370b3",
-    "js/apps.js": "fbf990c64eaf5bd7",
-    "js/main.js": "bc907ab37ddb8a65",
+    "css/style.css": "53ff63af621fbb09",
+    "js/icons.js": "78174547cafd24ef",
+    "js/apps.js": "efb6c16a4bec8054",
+    "js/main.js": "7ae2551a9d8de039",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",
@@ -44,7 +44,7 @@
     "icons/disk.png": "2f4ffea7ead85c08",
     "icons/dictionary.png": "d50fcb44e741991e",
     "icons/softwareupdate.png": "f4d5c03eaafd89d1",
-    "icons/siri.png": "4c99c51d873e2713",
+    "icons/siri.png": "b0832c89cbdd72e4",
     "wall/ventura.jpg": "75f4ca53f4b75045",
     "wall/ventura_t.jpg": "66a62ecdca35abe1",
     "wall/monterey.jpg": "bae3d83adcd9f485",

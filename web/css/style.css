@@ -1608,3 +1608,48 @@ body.dark .upd-prog { background:rgba(255,255,255,.12); }
   background:rgba(10,132,255,.1); padding:2px 8px; border-radius:6px; }
 .dict-def { font-size:13.5px; line-height:1.7; margin-bottom:6px; }
 .dict-ex { color:#888; font-size:12.5px; margin-top:2px; }
+
+/* ═══ Siri 输入栏 + 麦克风 ═══ */
+.siri-bar { display:flex; gap:8px; width:100%; }
+.siri-input { flex:1; }
+.siri-mic { border:none; border-radius:50%; width:34px; height:34px; font-size:15px;
+  background:rgba(120,120,128,.16); cursor:pointer; flex:0 0 34px; transition:background .15s; }
+.siri-mic:active { background:rgba(120,120,128,.35); }
+.siri-mic.rec { background:#ff3b30; animation:micPulse 1s infinite; }
+@keyframes micPulse { 50% { box-shadow:0 0 0 6px rgba(255,59,48,.25); } }
+
+/* ═══ 软件更新页美化 ═══ */
+.upd-hero { background:rgba(255,255,255,.5); backdrop-filter:blur(40px) saturate(180%);
+  -webkit-backdrop-filter:blur(40px) saturate(180%);
+  border-radius:26px; padding:34px 24px 26px; text-align:center;
+  box-shadow:0 12px 40px rgba(0,0,0,.12), inset 0 0 0 1px rgba(255,255,255,.55); }
+body.dark .upd-hero { background:rgba(44,44,50,.55); box-shadow:0 12px 40px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.12); }
+.upd-gear-big { display:flex; justify-content:center; filter:drop-shadow(0 6px 14px rgba(0,0,0,.18)); }
+.upd-card { background:rgba(255,255,255,.5); backdrop-filter:blur(40px) saturate(180%);
+  -webkit-backdrop-filter:blur(40px) saturate(180%);
+  border-radius:22px; padding:24px 22px; text-align:center;
+  box-shadow:0 8px 28px rgba(0,0,0,.1), inset 0 0 0 1px rgba(255,255,255,.5); }
+body.dark .upd-card { background:rgba(44,44,50,.55); box-shadow:0 8px 28px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.12); }
+.upd-btn.restart { background:#30d158; }
+.upd-btn.restart:active { filter:brightness(.9); }
+.upd-gear-big svg { animation:none; }
+
+/* ═══ Siri 真图标光球 ═══ */
+.siri-blob { background: url(../icons/siri.png) center/cover !important; animation:none !important; border-radius:24% !important;
+  box-shadow: 0 0 24px rgba(140,80,255,.45); }
+.siri-blob::before, .siri-blob::after { display:none !important; }
+
+/* ═══ 文本编辑器工具栏 ═══ */
+.te-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; border-bottom:1px solid var(--separator); flex:0 0 auto; }
+.te-file { font-size:13px; font-weight:600; color:var(--text); }
+.te-bar .pill-btn { font-size:12px; padding:4px 12px; }
+.te-area { flex:1; border:none; outline:none; resize:none; padding:16px 20px;
+  font:14px/1.7 ui-monospace, var(--font); background:transparent; color:inherit; }
+
+/* ═══ Siri 文字可读性修复（面板固定深色玻璃，文字统一浅色） ═══ */
+#siri .siri-sub { color:#e9e9f2 !important; }
+#siri .siri-text { color:#fff; }
+#siri .siri-input { background:rgba(255,255,255,.14) !important; color:#fff !important; }
+#siri .siri-input::placeholder { color:rgba(255,255,255,.5); }
+#siri .siri-input:focus { background:rgba(255,255,255,.2) !important; }
+#siri .pill-btn.on { color:#fff; }

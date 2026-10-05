@@ -355,6 +355,28 @@ const GLYPH = {
   stage: _G('<rect x="3.5" y="6" width="9" height="12" rx="2"/><path d="M16.5 8.5h4M16.5 12h4M16.5 15.5h4"/>'),
   mirror: _G('<rect x="3" y="4.5" width="18" height="12.5" rx="2"/><path d="M12 13.5l-3.5 4h7z" fill="currentColor" stroke="none"/>'),
   cursor: _G('<path d="M6.5 3.5 L19 11.5 13.6 13.2 17.2 19.6 14.8 21 11.2 14.7 6.8 17.8 Z" fill="currentColor" stroke="none"/>'),
+  /* macOS 系统设置风格双齿轮 */
+  gearBig: (() => {
+    const teeth = (cx, cy, r1, r2, n, color) => {
+      let s = '';
+      for (let i = 0; i < n; i++) {
+        const a = (360 / n) * i;
+        s += `<rect x="${cx - r2 * 0.18}" y="${cy - r2}" width="${r2 * 0.36}" height="${r2 - r1 + r2 * 0.18}" rx="${r2 * 0.14}" fill="${color}" transform="rotate(${a} ${cx} ${cy})"/>`;
+      }
+      return s;
+    };
+    const gear = (cx, cy, rOut, rIn, rHole, n, color) =>
+      `${teeth(cx, cy, rIn, rOut, n, color)}<circle cx="${cx}" cy="${cy}" r="${rIn}" fill="${color}"/><circle cx="${cx}" cy="${cy}" r="${rHole}" fill="#ececf1"/>`;
+    return `<svg viewBox="0 0 100 100" width="76" height="76">
+      <defs><linearGradient id="gg1" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#fdfdff"/><stop offset="1" stop-color="#d4d4dc"/>
+      </linearGradient></defs>
+      <circle cx="50" cy="50" r="47" fill="url(#gg1)"/>
+      <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(0,0,0,.08)" stroke-width="1"/>
+      ${gear(40, 42, 26, 19, 8, 8, '#9d9da5')}
+      ${gear(66, 68, 17, 12, 5, 8, '#7c7c86')}
+    </svg>`;
+  })(),
   sun: _G('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>'),
   speaker: _G('<path d="M4 9.5v5h3.5l5 4v-13l-5 4z" fill="currentColor" stroke="none"/><path d="M15.5 9.2a4 4 0 010 5.6M18 6.5a8 8 0 010 11"/>'),
   recents: _G('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.2v4.8l3.4 2"/>'),
