@@ -262,17 +262,26 @@ function toggleWidgets(on) {
 }
 async function refreshWidgets() {
   const wg = $('#widgets');
-  if (!wg || wg.classList.contains('hidden')) return;
+  const wgHidden = !wg || wg.classList.contains('hidden');
   const d = new Date();
   const wc = $('#wgClock');
-  if (wc) wc.textContent = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (wc && !wgHidden) wc.textContent = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   const wb = $('#wgBatt');
-  if (wb) wb.textContent = batteryPct + '%';
+  if (wb && !wgHidden) wb.textContent = batteryPct + '%';
   const loc = await locate();
   const w = await fetchWeather(loc.lat, loc.lon);
-  const ww = $('#wgWeather'), wcnd = $('#wgCond');
-  if (w && ww) { ww.textContent = w.cur.temp + '°'; if (wcnd) wcnd.textContent = `${w.cur.icon} ${loc.city}`; }
-  else if (ww) { ww.textContent = '--°'; if (wcnd) wcnd.textContent = '离线'; }
+  if (!w) return;
+  /* 桌面小组件 */
+  if (!wgHidden) {
+    const ww = $('#wgWeather'), wcnd = $('#wgCond');
+    if (ww) ww.textContent = w.cur.temp + '°';
+    if (wcnd) wcnd.textContent = `${w.cur.icon} ${loc.city}`;
+  }
+  /* 通知中心天气 */
+  const nt = $('#ncTemp'), ncy = $('#ncCity'), nr = $('#ncRange');
+  if (nt) nt.textContent = w.cur.temp + '°';
+  if (ncy) ncy.textContent = `${loc.city} · ${w.cur.cond}`;
+  if (nr && w.days && w.days[0]) nr.textContent = `最高 ${w.days[0].hi}° 最低 ${w.days[0].lo}°`;
 }
 /* 弹层打开 → 网页层让位；弹层关闭 → 只要宿主窗口没被最小化就恢复 */
 function browserYield(on) {
@@ -412,7 +421,14 @@ async function otaCheck(silent) {
   const has = remote.code > APP_VER.code && (!silent || remote.code > skip || force);
   return has ? { remote, source: best, all: res, force } : null;
 }
-/* 差量更新：只下载哈希变化的文件 */
+/* 差量更新：只下载哈希变化的文件，写入前逐个校验 SHA-256 */
+async function sha16B64(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const h = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
 async function otaApply(sourceBase, manifest, onProgress) {
   /* 本地基线：优先 localStorage，其次 APK 出厂清单 */
   let baseline = {};
@@ -426,16 +442,22 @@ async function otaApply(sourceBase, manifest, onProgress) {
   const files = manifest.files || {};
   const changed = Object.keys(files).filter(f => baseline[f] !== files[f]);
   if (!changed.length) { onProgress(1, '无需更新'); return 0; }
+  const canVerify = !!(crypto && crypto.subtle);
   let done = 0, bytes = 0;
   for (const f of changed) {
     onProgress(done / changed.length, `下载 ${f}`);
     const b64 = await bridgeBinary(sourceBase + f, 30000);
     if (!b64) throw new Error('下载失败: ' + f);
+    /* 哈希校验：与清单不符 = 源被污染/缓存陈旧，中止 */
+    if (canVerify) {
+      const hv = await sha16B64(b64);
+      if (hv !== files[f]) throw new Error(`校验失败: ${f}（请换个时间重试）`);
+    }
     bytes += Math.round(b64.length * 3 / 4);
     if (!AndroidBridge.writeWebFile(f, b64)) throw new Error('写入失败: ' + f);
     baseline[f] = files[f];
     done++;
-    onProgress(done / changed.length, `${done}/${changed.length} 个文件`);
+    onProgress(done / changed.length, `${done}/${changed.length} 个文件（已校验）`);
   }
   localStorage.setItem('mac_ota_hashes', JSON.stringify(baseline));
   localStorage.setItem('mac_ota_applied', '1');
@@ -490,6 +512,38 @@ const IDB = {
     });
   },
 };
+
+/* ───────── 表情与符号选择器 ───────── */
+const EMOJI_CATS = {
+  '笑脸': ['😀','😄','😂','🤣','😊','😍','🤔','😅','😭','😡','🥳','😴','🤯','😎','🥺','😤'],
+  '手势': ['👍','👎','👌','✌️','🤝','👏','🙏','💪','👋','🤟','☝️','👇'],
+  '动物自然': ['🐳','🐱','🐶','🦊','🐼','🦁','🐸','🌸','🌙','⭐','🌈','🔥','❄️','🍎','🍊','🍉'],
+  '物品': ['📱','💻','⌚️','🎧','📷','🎮','🚀','✈️','🚗','🏠','📚','✏️','🎁','🎵','⚽️','🏆'],
+  '符号': ['❤️','💛','💚','💙','💜','🖤','✅','❌','⚠️','💯','♻️','🔔','🔒','💡'],
+};
+function openEmoji() {
+  const ej = $('#emoji');
+  ej.classList.toggle('hidden');
+  if (ej.classList.contains('hidden')) return;
+  const grid = $('#ejGrid');
+  const draw = f => {
+    grid.innerHTML = Object.entries(EMOJI_CATS).map(([cat, arr]) =>
+      `<div class="ej-cat">${cat}</div>` + arr.map(e2 => `<span class="ej-e">${e2}</span>`).join('')).join('');
+    grid.querySelectorAll('.ej-e').forEach(s => s.addEventListener('pointerdown', ev => {
+      ev.stopPropagation();
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) {
+        const p = ae.selectionStart != null ? ae.selectionStart : ae.value.length;
+        ae.value = ae.value.slice(0, p) + s.textContent + ae.value.slice(p);
+        ae.dispatchEvent(new Event('input', { bubbles: true }));
+        ae.focus();
+      } else if (navigator.clipboard) navigator.clipboard.writeText(s.textContent).catch(() => {});
+      ej.classList.add('hidden');
+    }));
+  };
+  draw('');
+  $('#ejSearch').value = '';
+}
 
 /* ───────── 通知 ───────── */
 const notifHistory = [];
@@ -2005,6 +2059,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     if (localStorage.getItem('mac_widgets') === '1') toggleWidgets(true);
     setInterval(refreshWidgets, 60000);
+    refreshWidgets();   /* 通知中心天气即时刷新 */
     if (settings.cursor) setCursorMode(true);
     applyMenubarVis();
     /* 蓝牙状态回填到控制中心 */
