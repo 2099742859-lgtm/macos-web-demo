@@ -1,6 +1,6 @@
 {
-  "code": 12,
-  "name": "1.0.2_beta_261005(8)",
+  "code": 13,
+  "name": "1.0.2_beta_261005(9)",
   "minCode": 1,
   "notes": [
     "提升系统稳定性"
@@ -11,7 +11,7 @@
     "css/style.css": "53ff63af621fbb09",
     "js/icons.js": "78174547cafd24ef",
     "js/apps.js": "17024a1ab01d6f7b",
-    "js/main.js": "25f0fc568e443d86",
+    "js/main.js": "74cdb1806bb7f144",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",

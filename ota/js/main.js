@@ -356,7 +356,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 12, name: '1.0.2_beta_261005(8)' };
+const APP_VER = { code: 13, name: '1.0.2_beta_261005(9)' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -1125,6 +1125,7 @@ async function apiFetch(url, opts, timeoutMs, retries) {
 }
 
 let siriAudio = null;
+const siriHist = [];   /* 上下文记忆（有界：最近 6 轮） */
 async function aiChat(userText) {
   const err = rateOK();
   if (err) return '⚠ ' + err;
@@ -1152,7 +1153,11 @@ async function aiChat(userText) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
       body: JSON.stringify({
         model: 'longcat-2.5',
-        messages: [{ role: 'system', content: sys }, { role: 'user', content: userText }],
+        messages: [
+          { role: 'system', content: sys },
+          ...siriHist,
+          { role: 'user', content: userText },
+        ],
         max_tokens: 300,
       }),
     }, 25000, 1);
@@ -1245,7 +1250,9 @@ function siriExec(reply) {
 function openSiri() {
   const siri = $('#siri');
   siri.classList.remove('hidden');
-  $('#siriText').textContent = '我是 Siri，请讲';
+  /* 超时 3 分钟重开 = 清空上下文 */
+  if (window._siriClosedAt && Date.now() - window._siriClosedAt > 180000) siriHist.length = 0;
+  $('#siriText').textContent = siriHist.length ? '继续，我在听' : '我是 Siri，请讲';
   $('#siriSub').textContent = '正在听…再点一下麦克风停止';
   browserYield(true);
   /* 开口即语音：弹出自动开始收音 */
@@ -1263,6 +1270,10 @@ async function siriAsk(text) {
   }
   const clean = siriExec(reply);
   $('#siriSub').textContent = clean;
+  /* 记入上下文（各截断 200 字，最多 6 轮 = 12 条） */
+  siriHist.push({ role: 'user', content: text.slice(0, 200) });
+  siriHist.push({ role: 'assistant', content: clean.slice(0, 200) });
+  while (siriHist.length > 12) siriHist.shift();
   ttsSpeak(clean);
 }
 function closeSiri() {
@@ -1270,6 +1281,8 @@ function closeSiri() {
   browserYield(false);
   if (siriAudio) { siriAudio.pause(); siriAudio = null; }
   if (window._siriRec) { try { window._siriRec.stop(); } catch (e) {} window._siriRec = null; }
+  /* 关闭超过 3 分钟再开 = 新对话，清空上下文 */
+  window._siriClosedAt = Date.now();
 }
 
 /* ───────── 调度中心（Mission Control） ───────── */
