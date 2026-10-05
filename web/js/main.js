@@ -377,7 +377,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 16, name: '1.0.2_beta_261005(12)' };
+const APP_VER = { code: 17, name: '1.1.0_beta_261005' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -2047,6 +2047,19 @@ window.addEventListener('DOMContentLoaded', () => {
     setInterval(refreshWidgets, 60000);
     if (settings.cursor) setCursorMode(true);
     applyMenubarVis();
+    /* 蓝牙状态回填到控制中心 */
+    if (settings.btOn === false) {
+      const bI = document.querySelector('#ccBt .cc-ico');
+      if (bI) bI.classList.remove('on');
+    }
+    /* 夜览/原彩 开机恢复 */
+    const tintLv = (settings.nightShift ? 0.22 : 0) + (settings.trueTone === true ? 0.05 : 0);
+    if (tintLv) {
+      const lay = document.createElement('div');
+      lay.id = 'nightShift';
+      lay.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:8900;background:#ff9500;mix-blend-mode:multiply;opacity:${tintLv}`;
+      document.body.appendChild(lay);
+    }
   } catch (e) { console.error(e); }
   /* 屏幕尺寸变化 → 重新计算缩放 */
   let rzTimer = null;

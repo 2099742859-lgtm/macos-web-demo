@@ -1137,7 +1137,7 @@ const APPS = {
             row('缩放', `<div class="seg-ctl" id="resSeg">${resOpts.map(([v, n]) =>
               `<span class="${(settings.scale || 100) === v ? 'sel' : ''}" data-v="${v}">${n}</span>`).join('')}</div>`) +
             row('亮度', `<span class="range-wrap"><input type="range" min="20" max="100" value="${100 - brightnessLevel * 100}" id="setBright"></span>`) +
-            row('原彩显示', tog(settings.trueTone !== false, 'ttTg')) + row('夜览', tog(!!settings.nightShift, 'nsTg'))) +
+            row('原彩显示', tog(settings.trueTone === true, 'ttTg')) + row('夜览', tog(!!settings.nightShift, 'nsTg'))) +
             `<p style="color:#888;font-size:12.5px">缩放实时改变界面元素大小；亮度条实时压暗整个桌面</p>`;
           bindToggles();
           main.querySelectorAll('#resSeg span').forEach(s => s.addEventListener('click', () => {
@@ -1149,7 +1149,7 @@ const APPS = {
           const ttT = main.querySelector('#ttTg'), nsT = main.querySelector('#nsTg');
           const applyTint = () => {
             let lay = document.getElementById('nightShift');
-            const level = (settings.nightShift ? 0.22 : 0) + (settings.trueTone !== false ? 0.05 : 0);
+            const level = (settings.nightShift ? 0.22 : 0) + (settings.trueTone === true ? 0.05 : 0);
             if (!level) { if (lay) lay.remove(); return; }
             if (!lay) {
               lay = document.createElement('div');
@@ -1232,6 +1232,14 @@ const APPS = {
           main.querySelector('#openBtSys').addEventListener('click', () => {
             if (window.AndroidBridge) AndroidBridge.openSysSettings('bt');
           });
+          /* 蓝牙开关（绑定在本页） */
+          const btT = main.querySelector('#btTg');
+          if (btT) btT.addEventListener('click', e => {
+            settings.btOn = e.currentTarget.classList.toggle('on'); saveSettings();
+            const bI = document.querySelector('#ccBt .cc-ico');
+            if (bI) bI.classList.toggle('on', settings.btOn);
+            notify('蓝牙', settings.btOn ? '蓝牙已打开' : '蓝牙已关闭');
+          });
         },
         sound: () => {
           const realVol = window.AndroidBridge && AndroidBridge.getVolumePct ? AndroidBridge.getVolumePct() : 60;
@@ -1259,13 +1267,6 @@ const APPS = {
           if (ns2) ns2.addEventListener('click', e => { settings.notifSummary = e.currentTarget.classList.toggle('on'); saveSettings(); });
           const lnT = main.querySelector('#lnTg');
           if (lnT) lnT.addEventListener('click', e => { settings.lockNotif = e.currentTarget.classList.toggle('on'); saveSettings(); });
-          const btT = main.querySelector('#btTg');
-          if (btT) btT.addEventListener('click', e => {
-            settings.btOn = e.currentTarget.classList.toggle('on'); saveSettings();
-            const bI = document.querySelector('#ccBt .cc-ico');
-            if (bI) bI.classList.toggle('on', settings.btOn);
-            notify('蓝牙', settings.btOn ? '蓝牙已打开' : '蓝牙已关闭');
-          });
         },
         focus: () => {
           const modes = [['勿扰模式', 'moon', '#5E5CE6'], ['工作', 'doc', '#0A84FF'], ['个人', 'person', '#30B0C7'], ['睡眠', 'moon', '#30D158']];

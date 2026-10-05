@@ -1,9 +1,10 @@
 {
-  "code": 16,
-  "name": "1.0.2_beta_261005(12)",
+  "code": 17,
+  "name": "1.1.0_beta_261005",
   "minCode": 1,
   "notes": [
-    "界面样式优化",
+    "Siri 联网搜索",
+    "Siri 多步执行系统操作",
     "修复若干问题"
   ],
   "files": {
@@ -11,8 +12,8 @@
     "jszip.min.js": "acc7e41455a80765",
     "css/style.css": "7ca8f3289f60a021",
     "js/icons.js": "d1b8be71c1c8d91c",
-    "js/apps.js": "20ef6f67f5c1dc49",
-    "js/main.js": "0242906612a9fee3",
+    "js/apps.js": "229c50c68550c79d",
+    "js/main.js": "121d4afe598e828e",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",
