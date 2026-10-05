@@ -1206,7 +1206,9 @@ async function aiChat(userText) {
     const running = Object.keys(winByApp).map(id => APPS[id].name).join('、') || '无';
     const ctx = `当前状态：时间 ${d.toLocaleString('zh-CN')}，电量 ${batteryPct}%，${NET.online ? '在线' : '离线'}，深色${darkMode ? '开' : '关'}，亮度 ${Math.round((1 - brightnessLevel) * 100)}%，正在运行：${running}。${weatherInfo}`;
     const sys = `你是这台 macOS 设备的 Siri。用中文简短回答（一两句话）。${ctx}
-你完全掌控这台设备，可以执行动作（回复末尾加标记，正文不要念出标记）：
+【极其重要】你的一切操作都必须通过回复中的动作标记执行，系统只认标记，不认文字描述！
+如果你只在文字里说"已打开/已创建"而不输出标记，什么都不会发生，用户会看到一个没有执行任何操作的骗子。
+规则：文字回复给用户看，标记负责执行，两者必须同时有。可用标记：
 [OPEN:应用id] 打开应用（safari,mail,maps,photos,notes,music,calendar,weather,calculator,terminal,settings,appstore,voicememo,photobooth,tv,podcast,reminders,facetime,clock,finder,dictionary）
 [CLOSE:应用id] 关闭应用  [CLOSEALL] 关闭全部窗口  [SHOWDESKTOP] 显示桌面
 [DARK:on/off] 深色模式  [BRIGHT:0-100] 亮度  [VOL:0-100] 音量
@@ -1216,10 +1218,10 @@ async function aiChat(userText) {
 [MUSIC:关键词] 搜索播放音乐  [TRASH] 清空废纸篓  [LAUNCHPAD] 启动台
 [SLEEP] 睡眠  [RESTART] 重启  [SHUTDOWN] 关机  [SWITCHER] App切换器
 [SPOTLIGHT:关键词] 聚焦搜索  [NOTIFY:内容] 发系统通知  [SCALE:80-140] 界面缩放
-[SEARCH:关键词] 联网搜索最新信息（新闻、实事、你不确定的知识都要搜）
-[SHELL:命令] 在终端执行 shell 命令（如 SHELL:ls -l、SHELL:mkdir 项目）；文件操作、下载、查信息都可以用终端完成
+[SEARCH:关键词] 联网搜索最新信息（天气、新闻、实事、汇率等你不知道的都【必须】先搜，不许凭记忆编造）
+[SHELL:命令] 在终端执行 shell 命令（如 SHELL:ls -l、SHELL:mkdir 项目）
 [CREATE:文件名|内容] 创建文件到桌面（如 CREATE:购物清单.txt|牛奶、鸡蛋）
-你也可以用 [SHELL:] 和 [CREATE:] 组合完成复杂文件任务`;
+回复中不要用 ** 等 Markdown 符号，直接写纯文本。`;
     const r = await apiFetch('https://api.hcnsec.cn/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
@@ -1378,6 +1380,14 @@ async function siriAsk(text) {
     }
     const { clean, done } = siriExec(reply);
     finalReply = clean || finalReply;
+    /* 嘴炮检测：声称做了事但没输出标记 → 打回去重做 */
+    const claims = /已(打开|创建|关闭|完成|设定|切换|调整|删除|记下|添加)/.test(clean);
+    if (!done.length && claims && round < 2) {
+      userMsg = '（系统：你的回复声称执行了操作，但没有任何动作标记，实际上什么都没发生！请重新回复，必须用 [OPEN:] [CREATE:] [SEARCH:] 等标记真正执行。）';
+      siriHist.push({ role: 'assistant', content: clean.slice(0, 400) });
+      round++;
+      continue;
+    }
     /* 后台执行：面板关了也继续，结果走通知 */
     if (!document.querySelector('#siri.hidden')) {
       $('#siriSub').textContent = clean + (done.length ? `\n⚙ ${done.join('、')}` : '');
