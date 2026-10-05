@@ -1230,41 +1230,46 @@ async function asrListenB64(b64) {
   const j = await r.json();
   return j.choices && j.choices[0] ? (j.choices[0].message.content || '').trim() : null;
 }
-/* ── 动作执行 ── */
+/* ── 动作执行（支持一次回复多个动作，返回执行记录供 Agent 循环） ── */
 function siriExec(reply) {
   let clean = reply;
-  const eat = (re, fn) => { const m = clean.match(re); if (m) { clean = clean.replace(re, '').trim(); fn(m); } };
-  eat(/\[OPEN:(\w+)\]/, m => { if (APPS[m[1]]) setTimeout(() => openApp(m[1]), 1200); });
-  eat(/\[CLOSE:(\w+)\]/, m => { const w = winByApp[m[1]]; if (w) closeWindow(w); });
-  eat(/\[CLOSEALL\]/, () => Object.keys(winByApp).forEach(id => { const w = winByApp[id]; if (w && document.getElementById(w)) closeWindow(w); }));
-  eat(/\[SHOWDESKTOP\]/, () => { $$('.window').forEach(w => minimizeWindow(w.id)); });
-  eat(/\[DARK:(on|off)\]/, m => applyDark(m[1] === 'on'));
-  eat(/\[BRIGHT:(\d+)\]/, m => setBrightness(1 - Math.min(100, +m[1]) / 100 * 0.8));
-  eat(/\[VOL:(\d+)\]/, m => { if (window.AndroidBridge && AndroidBridge.setVolumePct) AndroidBridge.setVolumePct(+m[1]); });
-  eat(/\[SHOT\]/, () => setTimeout(screenshot, 800));
-  eat(/\[LOCK\]/, () => setTimeout(() => lockScreen(), 1000));
-  eat(/\[WALL:(\d)\]/, m => setWallpaper(Math.min(7, +m[1])));
-  eat(/\[WIFI:(on|off)\]/, m => notify('无线局域网', m[1] === 'on' ? '已打开' : '已关闭'));
-  eat(/\[FOCUS:(on|off)\]/, m => { settings.focusOn = m[1] === 'on'; saveSettings(); notify('专注模式', settings.focusOn ? '已开启' : '已关闭'); });
-  eat(/\[WIDGETS:(on|off)\]/, m => toggleWidgets(m[1] === 'on'));
-  eat(/\[MC\]/, () => setTimeout(openMC, 900));
-  eat(/\[LAUNCHPAD\]/, () => setTimeout(() => toggleLaunchpad(true), 900));
-  eat(/\[TRASH\]/, () => { TRASH.length = 0; saveTrash(); refreshDockTrash(); notify('废纸篓', '已清空'); });
+  const done = [];
+  const eat = (re, fn, label) => {
+    const ms = [...clean.matchAll(new RegExp(re, 'g'))];
+    ms.forEach(m => { fn(m); done.push(label(m)); });
+    clean = clean.replace(new RegExp(re, 'g'), '').trim();
+  };
+  eat(/\[OPEN:(\w+)\]/, m => { if (APPS[m[1]]) setTimeout(() => openApp(m[1]), 1200); }, m => `打开了${APPS[m[1]] ? APPS[m[1]].name : m[1]}`);
+  eat(/\[CLOSE:(\w+)\]/, m => { const w = winByApp[m[1]]; if (w) closeWindow(w); }, m => `关闭了${APPS[m[1]] ? APPS[m[1]].name : m[1]}`);
+  eat(/\[CLOSEALL\]/, () => Object.keys(winByApp).forEach(id => { const w = winByApp[id]; if (w && document.getElementById(w)) closeWindow(w); }), () => '关闭了全部窗口');
+  eat(/\[SHOWDESKTOP\]/, () => { $$('.window').forEach(w => minimizeWindow(w.id)); }, () => '已显示桌面');
+  eat(/\[DARK:(on|off)\]/, m => applyDark(m[1] === 'on'), m => `深色模式已${m[1] === 'on' ? '开' : '关'}`);
+  eat(/\[BRIGHT:(\d+)\]/, m => setBrightness(1 - Math.min(100, +m[1]) / 100 * 0.8), m => `亮度调到${m[1]}%`);
+  eat(/\[VOL:(\d+)\]/, m => { if (window.AndroidBridge && AndroidBridge.setVolumePct) AndroidBridge.setVolumePct(+m[1]); }, m => `音量调到${m[1]}%`);
+  eat(/\[SHOT\]/, () => setTimeout(screenshot, 800), () => '已截屏');
+  eat(/\[LOCK\]/, () => setTimeout(() => lockScreen(), 1000), () => '已锁屏');
+  eat(/\[WALL:(\d)\]/, m => setWallpaper(Math.min(7, +m[1])), m => `换了第${+m[1] + 1}张壁纸`);
+  eat(/\[WIFI:(on|off)\]/, m => notify('无线局域网', m[1] === 'on' ? '已打开' : '已关闭'), m => `WiFi已${m[1] === 'on' ? '开' : '关'}`);
+  eat(/\[FOCUS:(on|off)\]/, m => { settings.focusOn = m[1] === 'on'; saveSettings(); notify('专注模式', settings.focusOn ? '已开启' : '已关闭'); }, m => `专注模式已${m[1] === 'on' ? '开' : '关'}`);
+  eat(/\[WIDGETS:(on|off)\]/, m => toggleWidgets(m[1] === 'on'), m => `小组件已${m[1] === 'on' ? '开' : '关'}`);
+  eat(/\[MC\]/, () => setTimeout(openMC, 900), () => '打开了调度中心');
+  eat(/\[LAUNCHPAD\]/, () => setTimeout(() => toggleLaunchpad(true), 900), () => '打开了启动台');
+  eat(/\[TRASH\]/, () => { TRASH.length = 0; saveTrash(); refreshDockTrash(); notify('废纸篓', '已清空'); }, () => '清空了废纸篓');
   eat(/\[NOTE:([^\]]+)\]/, m => {
     const notes = JSON.parse(localStorage.getItem('mac_notes') || '[]');
     notes.unshift({ t: m[1].slice(0, 12), b: m[1] });
     localStorage.setItem('mac_notes', JSON.stringify(notes));
     notify('备忘录', '已记下');
-  });
+  }, () => '记到备忘录了');
   eat(/\[REMIND:([^\]]+)\]/, m => {
     const items = JSON.parse(localStorage.getItem('mac_reminders') || '[]');
     items.unshift([m[1], false]);
     localStorage.setItem('mac_reminders', JSON.stringify(items));
     notify('提醒事项', '已添加提醒');
-  });
-  eat(/\[TIMER:(\d+)\]/, m => notify('时钟', `已设定 ${m[1]} 分钟倒计时`));
-  eat(/\[MUSIC:([^\]]+)\]/, m => { openApp('music'); setTimeout(() => { const s = document.querySelector('#muSearch'); if (s) { s.value = m[1]; s.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); } }, 800); });
-  return clean;
+  }, () => '加了提醒');
+  eat(/\[TIMER:(\d+)\]/, m => notify('时钟', `已设定 ${m[1]} 分钟倒计时`), m => `定了${m[1]}分钟倒计时`);
+  eat(/\[MUSIC:([^\]]+)\]/, m => { openApp('music'); setTimeout(() => { const s = document.querySelector('#muSearch'); if (s) { s.value = m[1]; s.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); } }, 800); }, m => `搜索播放「${m[1]}」`);
+  return { clean, done };
 }
 function openSiri() {
   const siri = $('#siri');
@@ -1286,18 +1291,27 @@ async function siriAsk(text) {
   $('#siriText').textContent = text;
   $('#siriSub').textContent = '思考中…';
   $('#siriInput').value = '';
-  const reply = await aiChat(text);
-  if (!reply) {
-    $('#siriSub').textContent = reply === null && !NET.online ? '离线了，先连网再聊' : '网络好像有点问题，稍后再试试';
-    return;
+  /* Agent 循环：执行动作 → 回报结果 → 允许继续规划，最多 3 轮 */
+  let userMsg = text, finalReply = '', round = 0;
+  while (round < 3) {
+    const reply = await aiChat(userMsg);
+    if (!reply) {
+      $('#siriSub').textContent = !NET.online ? '离线了，先连网再聊' : '网络好像有点问题，稍后再试试';
+      return;
+    }
+    const { clean, done } = siriExec(reply);
+    finalReply = clean || finalReply;
+    $('#siriSub').textContent = clean + (done.length ? `\n⚙ ${done.join('、')}` : '');
+    if (!done.length) break;   /* 没动作 = 对话结束 */
+    /* 回报执行结果，让模型决定是否继续 */
+    siriHist.push({ role: 'assistant', content: clean.slice(0, 400) });
+    userMsg = `（系统回报：已执行 ${done.join('、')}。如果任务已完成就直接总结回复用户，不要重复动作；如果还有后续步骤，继续输出动作标记。）`;
+    round++;
   }
-  const clean = siriExec(reply);
-  $('#siriSub').textContent = clean;
-  /* 记入上下文（各截断 200 字，最多 6 轮 = 12 条） */
-  siriHist.push({ role: 'user', content: text.slice(0, 400) });
-  siriHist.push({ role: 'assistant', content: clean.slice(0, 400) });
   while (siriHist.length > 32) siriHist.shift();
-  ttsSpeak(clean);
+  siriHist.push({ role: 'user', content: text.slice(0, 400) });
+  if (finalReply) { siriHist.push({ role: 'assistant', content: finalReply.slice(0, 400) }); while (siriHist.length > 32) siriHist.shift(); }
+  ttsSpeak(finalReply || '已完成');
 }
 function closeSiri() {
   $('#siri').classList.add('hidden');
