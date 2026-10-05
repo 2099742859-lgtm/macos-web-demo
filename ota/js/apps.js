@@ -187,7 +187,15 @@ const APPS = {
         it.classList.add('sel');
         const n = it.dataset.go;
         if (n === '隔空投送') { openApp('airdrop'); return; }
-        if (n === '最近使用') { notify('访达', '「最近使用」在演示版中不可用'); return; }
+        if (n === '最近使用') {
+          const recents = JSON.parse(localStorage.getItem('mac_recents') || '[]');
+          if (!recents.length) { notify('访达', '还没有最近使用的项目'); return; }
+          path = ['__最近使用__']; selected = null;
+          main.innerHTML = recents.map(r =>
+            `<div class="fs-file" data-name="${r}"><div class="ff-ico">${fileIcon(r)}</div><span>${r}</span></div>`).join('');
+          main.querySelectorAll('.fs-file').forEach(f => f.addEventListener('pointerdown', () => quickLook(f.dataset.name)));
+          return;
+        }
         path = n === 'Macintosh HD' ? ['Macintosh HD'] : ['Macintosh HD', '用户', 'User'];
         if (['应用程序', '桌面', '文稿', '下载'].includes(n)) path.push(n);
         pushHist(); selected = null; draw();
@@ -1332,6 +1340,7 @@ const APPS = {
             <div class="upd-ver">当前版本 ${APP_VER.name}${window.AndroidBridge && AndroidBridge.isUpdated && AndroidBridge.isUpdated() ? ' · <span style="color:#30d158">OTA 增强版</span>' : ''}</div>
             <div class="upd-btn" id="updCheck">检查更新</div>
             <div class="upd-status" id="updStatus"></div>
+            <div class="upd-hint">提示：更新完成后，请删除后台重新打开 App</div>
           </div>
           ${lastCard}
           <div id="updDetail"></div>`;
@@ -1388,15 +1397,14 @@ const APPS = {
                 prog.style.display = 'none';
                 pct.classList.add('hidden');
                 detail.querySelector('.upd-new').innerHTML = `✓ ${remote.name} 已就绪`;
-                detail.querySelector('.upd-notes').innerHTML = `<span style="color:#888;font-size:12.5px">${sizeTxt}，重启后生效</span>`;
+                detail.querySelector('.upd-notes').innerHTML = `<span style="color:#888;font-size:12.5px">${sizeTxt}，删除后台重新打开 App 生效</span>`;
                 const btnWrap = detail.querySelector('.upd-card div[style*="display:flex"]');
-                btnWrap.innerHTML = `<div class="upd-btn restart" id="updRestart">现在重启</div><div class="upd-btn ghost" id="updLater">稍后</div>`;
+                btnWrap.innerHTML = `<div class="upd-btn restart" id="updRestart">我知道了</div>`;
                 detail.querySelector('#updRestart').addEventListener('click', () => {
-                  /* 真·重启应用（清缓存+重建，切到 OTA 目录） */
+                  /* 尝试软重启；不成功就由用户删后台 */
                   if (window.AndroidBridge && AndroidBridge.restartApp) AndroidBridge.restartApp();
                   else location.reload();
                 });
-                detail.querySelector('#updLater').addEventListener('click', () => notify('软件更新', '更新已就绪，重启应用后生效'));
               } catch (e) {
                 pct.textContent = '✗ 更新失败：' + e.message;
                 go.style.display = ''; go.textContent = '重试';
@@ -1792,12 +1800,35 @@ const APPS = {
       });
     }
   },
+  /* ─── TV（真实视频流） ─── */
   tv: {
-    name: '视频', icon: () => ICONS.tv(), w: 480, h: 380,
-    render(el) {
-      el.innerHTML = `<div style="flex:1;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff">
-        <div style="font-size:56px">📺</div><div style="font-size:15px">《地球脉动 III》</div>
-        <div style="font-size:13px;color:#888">演示版播放器 · 暂无片源</div></div>`;
+    name: 'TV', icon: () => ICONS.tv(), w: 720, h: 460,
+    render(el, win) {
+      const CHANNELS = [
+        { n: 'Big Buck Bunny', u: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', d: '开源电影 · 10 分钟' },
+        { n: 'Sintel', u: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', d: '开源电影 · 15 分钟' },
+        { n: 'Tears of Steel', u: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', d: '开源科幻短片' },
+        { n: 'Elephants Dream', u: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', d: '第一部开源电影' },
+      ];
+      el.innerHTML = `<div class="tv-app">
+        <div class="tv-main">
+          <video id="tvVideo" controls playsinline poster="" style="width:100%;background:#000;border-radius:0"></video>
+          <div class="tv-title" id="tvTitle">选择频道开始观看</div>
+        </div>
+        <div class="tv-side">${CHANNELS.map((c, i) => `
+          <div class="tv-ch" data-i="${i}"><b>${c.n}</b><span>${c.d}</span></div>`).join('')}
+        </div></div>`;
+      const video = el.querySelector('#tvVideo');
+      el.querySelectorAll('.tv-ch').forEach(ch => ch.addEventListener('click', () => {
+        el.querySelectorAll('.tv-ch').forEach(x => x.classList.remove('sel'));
+        ch.classList.add('sel');
+        const c = CHANNELS[+ch.dataset.i];
+        video.src = c.u;
+        video.play().catch(() => {});
+        el.querySelector('#tvTitle').textContent = c.n;
+        notify('TV', `正在播放「${c.n}」`);
+      }));
+      if (win) win._cleanup = () => { try { video.pause(); video.src = ''; } catch (e) {} };
     }
   },
 
@@ -2243,7 +2274,7 @@ const APPS = {
     }
   },
 
-  /* ─── 隔空投送 ─── */
+  /* ─── 隔空投送（显示真实蓝牙设备） ─── */
   airdrop: {
     name: '隔空投送', icon: () => '<img src="icons/airdrop.png" draggable="false">', w: 420, h: 340,
     render(el) {
@@ -2251,15 +2282,27 @@ const APPS = {
         <div class="ad-radar"><div class="ad-ring"></div><div class="ad-ring r2"></div><div class="ad-ring r3"></div>
           <img src="icons/airdrop.png" class="ad-me"></div>
         <div class="ad-devices" id="adDevs"></div>
-        <div class="ad-hint">正在搜索附近的 Apple 设备…</div></div>`;
-      const devs = [['📱', 'iPhone 15 Pro'], ['📱', 'iPad Air'], ['💻', 'MacBook Pro']];
-      devs.forEach((d, i) => setTimeout(() => {
-        const box = el.querySelector('#adDevs');
-        if (!document.contains(box)) return;
-        box.insertAdjacentHTML('beforeend', `<div class="ad-dev" style="animation-delay:0s">
-          <div class="ad-av">${d[0]}</div><div class="ad-name">${d[1]}</div></div>`);
-        box.lastElementChild.addEventListener('click', () => notify('隔空投送', `正在发送到「${d[1]}」…（演示）`));
-      }, 900 * (i + 1)));
+        <div class="ad-hint" id="adHint">正在搜索附近的设备…</div></div>`;
+      const box = el.querySelector('#adDevs');
+      /* 读真实已配对蓝牙设备 */
+      let realDevs = [];
+      try {
+        if (window.AndroidBridge && AndroidBridge.getBtInfo) {
+          const b = JSON.parse(AndroidBridge.getBtInfo());
+          if (b && b.devices) realDevs = b.devices;
+        }
+      } catch (e) {}
+      if (realDevs.length) {
+        el.querySelector('#adHint').textContent = `发现 ${realDevs.length} 个已配对设备`;
+        realDevs.forEach((d, i) => setTimeout(() => {
+          if (!document.contains(box)) return;
+          box.insertAdjacentHTML('beforeend', `<div class="ad-dev" style="animation-delay:0s">
+            <div class="ad-av">🎧</div><div class="ad-name">${d}</div></div>`);
+          box.lastElementChild.addEventListener('click', () => notify('隔空投送', `「${d}」是蓝牙设备，传输需要 Apple 设备`));
+        }, 500 + i * 450));
+      } else {
+        el.querySelector('#adHint').textContent = '没有发现设备（可在系统蓝牙中先配对）';
+      }
     }
   },
 
@@ -2727,16 +2770,40 @@ function renderCompass(el) {
   el.innerHTML = `<div class="rain-app"><div class="compass-dial" id="cpDial">
     ${['北', '东', '南', '西'].map((d, i) => `<span class="cp-dir" style="transform:rotate(${i * 90}deg) translateY(-86px)">${d}</span>`).join('')}
     <div class="cp-needle"></div></div>
-    <div class="cp-deg" id="cpDeg">000°</div>
-    <div class="rain-desc">设备无罗盘传感器，为演示动画</div></div>`;
-  let deg = 0;
-  const iv = setInterval(() => {
-    if (!document.contains(el)) return clearInterval(iv);
-    deg = (deg + (Math.random() - 0.5) * 6 + 0.3) % 360;
-    const d = (deg + 360) % 360;
-    el.querySelector('#cpDial').style.transform = `rotate(${-d}deg)`;
-    el.querySelector('#cpDeg').textContent = String(Math.round(d)).padStart(3, '0') + '°';
-  }, 120);
+    <div class="cp-deg" id="cpDeg">---°</div>
+    <div class="rain-desc" id="cpDesc">正在读取罗盘传感器…</div></div>`;
+  const dial = el.querySelector('#cpDial'), degEl = el.querySelector('#cpDeg'), desc = el.querySelector('#cpDesc');
+  let live = false;
+  /* 真·罗盘：设备方向传感器 */
+  const onOrient = e => {
+    let heading = null;
+    if (e.webkitCompassHeading != null) heading = e.webkitCompassHeading;       /* iOS */
+    else if (e.alpha != null) heading = 360 - e.alpha;                          /* Android */
+    if (heading == null) return;
+    live = true;
+    dial.style.transform = `rotate(${-heading}deg)`;
+    degEl.textContent = String(Math.round(heading)).padStart(3, '0') + '°';
+    desc.textContent = '真实罗盘 · 转动设备试试';
+  };
+  window.addEventListener('deviceorientationabsolute', onOrient, true);
+  window.addEventListener('deviceorientation', onOrient, true);
+  el.closest('.window')._cleanup = () => {
+    window.removeEventListener('deviceorientationabsolute', onOrient, true);
+    window.removeEventListener('deviceorientation', onOrient, true);
+  };
+  /* 3 秒无传感器数据 → 演示动画 */
+  setTimeout(() => {
+    if (live || !document.contains(el)) return;
+    desc.textContent = '无罗盘传感器，演示模式';
+    let deg = 0;
+    const iv = setInterval(() => {
+      if (!document.contains(el) || live) return clearInterval(iv);
+      deg = (deg + (Math.random() - 0.5) * 6 + 0.3) % 360;
+      const d = (deg + 360) % 360;
+      dial.style.transform = `rotate(${-d}deg)`;
+      degEl.textContent = String(Math.round(d)).padStart(3, '0') + '°';
+    }, 120);
+  }, 3000);
 }
 
 

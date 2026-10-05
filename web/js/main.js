@@ -377,7 +377,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 17, name: '1.1.0_beta_261005' };
+const APP_VER = { code: 18, name: '1.1.1_beta_261005' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -1092,7 +1092,15 @@ function drawSpotlight(q) {
 window.isTextFile = n => /\.(txt|md|markdown|js|css|html|json|csv|log|xml|sh|py)$/i.test(n) ||
   (FILE_CONTENTS[n] != null && typeof FILE_CONTENTS[n] === 'string' && !FILE_CONTENTS[n].startsWith('@idb:'));
 
+/* 记录最近使用的文件 */
+function pushRecent(name) {
+  const r = JSON.parse(localStorage.getItem('mac_recents') || '[]').filter(x => x !== name);
+  r.unshift(name);
+  localStorage.setItem('mac_recents', JSON.stringify(r.slice(0, 20)));
+}
+
 function quickLook(name) {
+  pushRecent(name);
   const ql = $('#quicklook');
   $('#qlName').textContent = name;
   const body = $('#qlBody');
@@ -1157,7 +1165,6 @@ async function apiFetch(url, opts, timeoutMs, retries) {
   throw new Error('rate');
 }
 
-let siriAudio = null;
 const siriHist = [];   /* 上下文记忆（有界：最近 16 轮） */
 async function aiChat(userText) {
   const err = rateOK();
@@ -1204,58 +1211,7 @@ async function aiChat(userText) {
   } catch (e) { return null; }
   finally { RATE.inFlight = false; }
 }
-async function ttsSpeak(text) {
-  if (settings.siriTTS === false) return;   /* 语音播报开关 */
-  try {
-    const r = await apiFetch('https://api.xiaomimimo.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': TTS_KEY },
-      body: JSON.stringify({
-        model: 'mimo-v2.5-tts',
-        messages: [{ role: 'assistant', content: text.slice(0, 300) }],
-        audio: { format: 'mp3', voice: '茉莉' },
-      }),
-    }, 30000, 1);
-    const j = await r.json();
-    const b64 = j.choices && j.choices[0] && j.choices[0].message.audio ? j.choices[0].message.audio.data : null;
-    if (!b64) return;
-    if (siriAudio) siriAudio.pause();
-    siriAudio = new Audio('data:audio/mpeg;base64,' + b64);
-    siriAudio.play().catch(() => {});
-  } catch (e) {}
-}
 /* ── 语音识别：MediaRecorder 录音 → 转 WAV → MiMo ASR ── */
-async function blobToWavB64(blob) {
-  const ab = await blob.arrayBuffer();
-  const ac = new (window.AudioContext || window.webkitAudioContext)();
-  const buf = await ac.decodeAudioData(ab);
-  const pcm = buf.getChannelData(0), rate = buf.sampleRate;
-  const out = new ArrayBuffer(44 + pcm.length * 2);
-  const v = new DataView(out);
-  const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  ws(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); ws(8, 'WAVE'); ws(12, 'fmt ');
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  ws(36, 'data'); v.setUint32(40, pcm.length * 2, true);
-  for (let i = 0; i < pcm.length; i++) { const s = Math.max(-1, Math.min(1, pcm[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
-  const bytes = new Uint8Array(out);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
-  return btoa(bin);
-}
-async function asrListenB64(b64) {
-  const r = await apiFetch('https://api.xiaomimimo.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': TTS_KEY },
-    body: JSON.stringify({
-      model: 'mimo-v2.5-asr',
-      messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: 'data:audio/wav;base64,' + b64 } }] }],
-      asr_options: { language: 'auto' },
-    }),
-  }, 30000, 1);
-  const j = await r.json();
-  return j.choices && j.choices[0] ? (j.choices[0].message.content || '').trim() : null;
-}
 /* ── Exa 联网搜索（MCP，免 Key） ── */
 async function webSearch(q) {
   try {
@@ -1334,11 +1290,11 @@ function openSiri() {
     $('#siriText').textContent = siriHist[siriHist.length - 2].content;
     $('#siriSub').textContent = siriHist[siriHist.length - 1].content;
   } else {
-    $('#siriText').textContent = '我是 Siri，请讲';
-    $('#siriSub').textContent = '正在听…再点一下麦克风停止';
+    $('#siriText').textContent = '我是 Siri';
+    $('#siriSub').textContent = '有什么可以帮你？';
   }
   browserYield(true);
-  setTimeout(() => { const m = $('#siriMic'); if (m && !window._siriRec) m.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); }, 300);
+  setTimeout(() => $('#siriInput').focus(), 250);
 }
 async function siriAsk(text) {
   if (!text.trim()) return;
@@ -1365,7 +1321,12 @@ async function siriAsk(text) {
     }
     const { clean, done } = siriExec(reply);
     finalReply = clean || finalReply;
-    $('#siriSub').textContent = clean + (done.length ? `\n⚙ ${done.join('、')}` : '');
+    /* 后台执行：面板关了也继续，结果走通知 */
+    if (!document.querySelector('#siri.hidden')) {
+      $('#siriSub').textContent = clean + (done.length ? `\n⚙ ${done.join('、')}` : '');
+    } else if (done.length) {
+      notify('Siri', done.join('、'));
+    }
     if (!done.length) break;   /* 没动作 = 对话结束 */
     /* 回报执行结果，让模型决定是否继续 */
     siriHist.push({ role: 'assistant', content: clean.slice(0, 400) });
@@ -1375,14 +1336,13 @@ async function siriAsk(text) {
   while (siriHist.length > 32) siriHist.shift();
   siriHist.push({ role: 'user', content: text.slice(0, 400) });
   if (finalReply) { siriHist.push({ role: 'assistant', content: finalReply.slice(0, 400) }); while (siriHist.length > 32) siriHist.shift(); }
-  ttsSpeak(finalReply || '已完成');
+  /* 面板已关 = 后台任务完成，发通知 */
+  if (document.querySelector('#siri.hidden') && finalReply) notify('Siri', finalReply.slice(0, 80));
 }
 function closeSiri() {
   $('#siri').classList.add('hidden');
   browserYield(false);
-  if (siriAudio) { siriAudio.pause(); siriAudio = null; }
-  if (window._siriRec) { try { window._siriRec.stop(); } catch (e) {} window._siriRec = null; }
-  /* 关闭超过 3 分钟再开 = 新对话，清空上下文 */
+  /* 后台继续执行：不打断进行中的 Agent 任务 */
   window._siriClosedAt = Date.now();
 }
 
@@ -1647,84 +1607,6 @@ function buildCC() {
   $('#siriInput').addEventListener('keydown', e => {
     e.stopPropagation();
     if (e.key === 'Enter') siriAsk(e.target.value);
-  });
-  /* 麦克风：原生 AudioRecord 优先（绕过 WebView NotReadableError），回落 getUserMedia */
-  const micBtn = $('#siriMic');
-  micBtn.innerHTML = GLYPH.mic;
-  const ttsBtn = $('#siriTts');
-  function drawTts() { ttsBtn.innerHTML = settings.siriTTS === false ? GLYPH.speakerMute : GLYPH.speaker; ttsBtn.classList.toggle('muted', settings.siriTTS === false); }
-  drawTts();
-  ttsBtn.addEventListener('pointerdown', e => {
-    e.stopPropagation();
-    settings.siriTTS = settings.siriTTS === false ? true : false;
-    saveSettings(); drawTts();
-    if (settings.siriTTS === false && siriAudio) { siriAudio.pause(); siriAudio = null; }
-    notify('Siri', settings.siriTTS === false ? '语音播报已关闭' : '语音播报已开启');
-  });
-  micBtn.addEventListener('pointerdown', async e => {
-    e.stopPropagation();
-    const nativeMic = window.AndroidBridge && AndroidBridge.micStart;
-    if (window._siriRec || window._siriNative) {
-      /* 停止 → 识别 */
-      micBtn.classList.remove('rec');
-      $('#siriSub').textContent = '识别中…';
-      try {
-        let text = null;
-        if (window._siriNative) {
-          window._siriNative = false;
-          const b64 = AndroidBridge.micStop();
-          if (b64) text = await asrListenB64(b64);
-        } else {
-          window._siriRec.stop();
-          return;   /* onstop 里继续 */
-        }
-        if (text) siriAsk(text);
-        else $('#siriSub').textContent = '没听清，再说一次？';
-      } catch (err) { $('#siriSub').textContent = '识别失败，试试打字'; }
-      return;
-    }
-    /* 开始录音 */
-    if (nativeMic) {
-      if (AndroidBridge.micStart()) {
-        window._siriNative = true;
-        micBtn.classList.add('rec');
-        $('#siriSub').textContent = '正在听…再点一下停止';
-        return;
-      }
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
-      const chunks = [];
-      rec.ondataavailable = ev => chunks.push(ev.data);
-      rec.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        window._siriRec = null;
-        micBtn.classList.remove('rec');
-        $('#siriSub').textContent = '识别中…';
-        try {
-          const text = await asrListenB64(await blobToWavB64(new Blob(chunks, { type: rec.mimeType })));
-          if (text) siriAsk(text);
-          else $('#siriSub').textContent = '没听清，再说一次？';
-        } catch (err) { $('#siriSub').textContent = '识别失败，试试打字'; }
-      };
-      window._siriRec = rec;
-      rec.start();
-      micBtn.classList.add('rec');
-      $('#siriSub').textContent = '正在听…再点一下停止';
-    } catch (err) {
-      /* 权限自检 + 引导 */
-      if (window.AndroidBridge && AndroidBridge.hasPermission && !AndroidBridge.hasPermission('RECORD_AUDIO')) {
-        $('#siriSub').innerHTML = `没有麦克风权限 <span class="pill-btn on" id="siriPerm" style="padding:3px 12px;font-size:12px">去开启</span>`;
-        $('#siriPerm').addEventListener('pointerdown', e2 => {
-          e2.stopPropagation();
-          AndroidBridge.requestPerms();
-          setTimeout(() => { if (!AndroidBridge.hasPermission('RECORD_AUDIO')) AndroidBridge.openAppSettings(); }, 1500);
-        });
-        return;
-      }
-      $('#siriSub').textContent = '麦克风不可用：' + (err.name || '未知错误') + '，可尝试关闭其它占用麦克风的应用';
-    }
   });
   $('#missionControl').addEventListener('pointerdown', e => { if (e.target.id === 'missionControl') e.currentTarget.classList.add('hidden'); });
   $('#qlClose').addEventListener('pointerdown', () => $('#quicklook').classList.add('hidden'));

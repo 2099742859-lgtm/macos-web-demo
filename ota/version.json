@@ -1,19 +1,19 @@
 {
-  "code": 17,
-  "name": "1.1.0_beta_261005",
+  "code": 18,
+  "name": "1.1.1_beta_261005",
   "minCode": 1,
   "notes": [
-    "Siri 联网搜索",
-    "Siri 多步执行系统操作",
-    "修复若干问题"
+    "Siri 更聪明了",
+    "一些应用焕然一新",
+    "系统细节优化"
   ],
   "files": {
-    "index.html": "85025ead76b709bd",
+    "index.html": "127342a542b012cb",
     "jszip.min.js": "acc7e41455a80765",
-    "css/style.css": "7ca8f3289f60a021",
+    "css/style.css": "608daa2c53e8ce50",
     "js/icons.js": "d1b8be71c1c8d91c",
-    "js/apps.js": "229c50c68550c79d",
-    "js/main.js": "121d4afe598e828e",
+    "js/apps.js": "71db73d75ff14f0d",
+    "js/main.js": "9e2aa8312f10182e",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",
