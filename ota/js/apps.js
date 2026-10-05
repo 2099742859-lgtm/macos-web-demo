@@ -1480,6 +1480,12 @@ const APPS = {
                   fill.style.width = (p * 100).toFixed(0) + '%';
                   pct.textContent = label + ' · ' + (p * 100).toFixed(0) + '%';
                 });
+                if (r === 0) {
+                  /* 文件确实全部一致，无需更新 */
+                  prog.style.display = 'none';
+                  pct.textContent = '本地文件已是最新';
+                  return;
+                }
                 const sizeTxt = r && r.bytes ? `增量 ${(r.bytes / 1024).toFixed(0)} KB / ${r.count} 个文件` : '';
                 /* 更新完成 → 主人手动点重启 */
                 prog.style.display = 'none';

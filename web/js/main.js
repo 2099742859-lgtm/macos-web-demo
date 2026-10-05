@@ -385,7 +385,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 23, name: '1.1.3_beta_261005' };
+const APP_VER = { code: 24, name: '1.1.3_beta_261005(2)' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -440,7 +440,11 @@ async function otaApply(sourceBase, manifest, onProgress) {
     } catch (e) {}
   }
   const files = manifest.files || {};
-  const changed = Object.keys(files).filter(f => baseline[f] !== files[f]);
+  let changed = Object.keys(files).filter(f => baseline[f] !== files[f]);
+  /* 基线说最新但版本号没跟上 = 之前没落盘成功，强制全量重下 */
+  if (!changed.length && manifest.code > APP_VER.code) {
+    changed = Object.keys(files);
+  }
   if (!changed.length) { onProgress(1, '无需更新'); return 0; }
   const canVerify = !!(crypto && crypto.subtle);
   let done = 0, bytes = 0;
