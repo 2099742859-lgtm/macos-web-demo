@@ -1,17 +1,17 @@
 {
-  "code": 13,
-  "name": "1.0.2_beta_261005(9)",
+  "code": 14,
+  "name": "1.0.2_beta_261005(10)",
   "minCode": 1,
   "notes": [
-    "提升系统稳定性"
+    "修复了 bug"
   ],
   "files": {
-    "index.html": "bbdae5eb0b682d43",
+    "index.html": "85025ead76b709bd",
     "jszip.min.js": "acc7e41455a80765",
-    "css/style.css": "53ff63af621fbb09",
-    "js/icons.js": "78174547cafd24ef",
-    "js/apps.js": "17024a1ab01d6f7b",
-    "js/main.js": "74cdb1806bb7f144",
+    "css/style.css": "0f32964fe785fed9",
+    "js/icons.js": "d1b8be71c1c8d91c",
+    "js/apps.js": "60afc856f45a4500",
+    "js/main.js": "4f73e2ce85d07799",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",

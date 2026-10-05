@@ -1293,7 +1293,7 @@ const APPS = {
             const report = `<div class="upd-sources">${res.map(r =>
               `<div class="upd-src"><span>${r.name}</span><span class="${r.data ? 'ok' : 'fail'}">${r.data ? r.ms + ' ms' : '超时 ✗'}</span></div>`).join('')}</div>`;
             if (!best) {
-              status.innerHTML = `<div style="color:#888;font-size:13px;margin-top:10px">🌐 所有更新源均不可达</div>` + report;
+              status.innerHTML = `<div class="upd-fail"><span class="upd-ico">${GLYPH.globe}</span>所有更新源均不可达</div>` + report;
               return;
             }
             const remote = best.data;
@@ -2113,10 +2113,36 @@ const APPS = {
           recs.splice(+b.dataset.i, 1); saveMemos(); draw();
         }));
       }
-      let tickIv = null;
+      let tickIv = null, nativeRec = false;
       el.querySelector('#vmRec').addEventListener('click', async () => {
+        /* 原生录音停止 */
+        if (nativeRec) {
+          nativeRec = false;
+          clearInterval(tickIv);
+          el.querySelector('#vmRec').classList.remove('rec');
+          const b64 = AndroidBridge.micStop();
+          if (b64) {
+            const key = 'memo_' + Date.now();
+            await IDB.put(key, 'data:audio/wav;base64,' + b64);
+            recs.unshift({ name: '录音 ' + (recs.length + 1), dur: Math.round((Date.now() - startTs) / 1000), date: new Date().toLocaleDateString('zh-CN'), key });
+            saveMemos(); draw();
+            notify('语音备忘录', '录音已保存');
+          }
+          return;
+        }
         if (mediaRec && mediaRec.state === 'recording') {
           mediaRec.stop();
+          return;
+        }
+        /* 原生录音优先 */
+        if (window.AndroidBridge && AndroidBridge.micStart && AndroidBridge.micStart()) {
+          nativeRec = true;
+          startTs = Date.now();
+          el.querySelector('#vmRec').classList.add('rec');
+          tickIv = setInterval(() => {
+            if (!document.contains(el)) return clearInterval(tickIv);
+            el.querySelector('#vmTime').textContent = fmt(Math.floor((Date.now() - startTs) / 1000));
+          }, 500);
           return;
         }
         try {

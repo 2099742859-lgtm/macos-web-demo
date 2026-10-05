@@ -413,6 +413,70 @@ public class MainActivity extends Activity {
             });
         }
 
+        /* 原生录音（绕过 WebView getUserMedia 的 NotReadableError） */
+        private android.media.AudioRecord micRec;
+        private Thread micThread;
+        private java.io.ByteArrayOutputStream micBuf;
+        private volatile boolean micRunning = false;
+
+        @JavascriptInterface
+        public boolean micStart() {
+            if (micRunning) return true;
+            try {
+                int rate = 44100;
+                int min = android.media.AudioRecord.getMinBufferSize(rate,
+                    android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT);
+                micRec = new android.media.AudioRecord(android.media.MediaRecorder.AudioSource.MIC,
+                    rate, android.media.AudioFormat.CHANNEL_IN_MONO,
+                    android.media.AudioFormat.ENCODING_PCM_16BIT, Math.max(min * 2, 8192));
+                if (micRec.getState() != android.media.AudioRecord.STATE_INITIALIZED) return false;
+                micBuf = new java.io.ByteArrayOutputStream();
+                micRunning = true;
+                micRec.startRecording();
+                micThread = new Thread(() -> {
+                    byte[] buf = new byte[4096];
+                    while (micRunning) {
+                        int n = micRec.read(buf, 0, buf.length);
+                        if (n > 0) micBuf.write(buf, 0, n);
+                    }
+                });
+                micThread.start();
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public String micStop() {
+            micRunning = false;
+            try {
+                if (micThread != null) micThread.join(600);
+                if (micRec != null) { micRec.stop(); micRec.release(); }
+            } catch (Exception ignored) {}
+            micRec = null;
+            if (micBuf == null || micBuf.size() == 0) return "";
+            byte[] pcm = micBuf.toByteArray();
+            /* 加 WAV 头（44 字节） */
+            java.io.ByteArrayOutputStream wav = new java.io.ByteArrayOutputStream();
+            try {
+                int byteRate = 44100 * 2;
+                wav.write("RIFF".getBytes());
+                wav.write(intLE(36 + pcm.length)); wav.write("WAVE".getBytes());
+                wav.write("fmt ".getBytes()); wav.write(intLE(16));
+                wav.write(shortLE(1)); wav.write(shortLE(1));
+                wav.write(intLE(44100)); wav.write(intLE(byteRate));
+                wav.write(shortLE(2)); wav.write(shortLE(16));
+                wav.write("data".getBytes()); wav.write(intLE(pcm.length));
+                wav.write(pcm);
+            } catch (Exception e) { return ""; }
+            return Base64.encodeToString(wav.toByteArray(), Base64.NO_WRAP);
+        }
+        private byte[] intLE(int v) {
+            return new byte[] { (byte) v, (byte) (v >> 8), (byte) (v >> 16), (byte) (v >> 24) };
+        }
+        private byte[] shortLE(int v) {
+            return new byte[] { (byte) v, (byte) (v >> 8) };
+        }
+
         /* 权限自检与引导 */
         @JavascriptInterface
         public boolean hasPermission(String p) {

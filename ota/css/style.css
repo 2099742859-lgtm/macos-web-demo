@@ -1653,3 +1653,14 @@ body.dark .upd-card { background:rgba(44,44,50,.55); box-shadow:0 8px 28px rgba(
 #siri .siri-input::placeholder { color:rgba(255,255,255,.5); }
 #siri .siri-input:focus { background:rgba(255,255,255,.2) !important; }
 #siri .pill-btn.on { color:#fff; }
+
+/* ═══ Siri 按钮字形化 ═══ */
+.siri-mic, .siri-tts { border:none; border-radius:50%; width:34px; height:34px; flex:0 0 34px;
+  background:rgba(255,255,255,.14); color:#fff; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:background .15s; }
+.siri-mic svg, .siri-tts svg { width:17px; height:17px; }
+.siri-mic:active, .siri-tts:active { background:rgba(255,255,255,.3); }
+.siri-mic.rec { background:#ff3b30; animation:micPulse 1s infinite; }
+.siri-tts.muted { opacity:.45; }
+.upd-fail { display:flex; align-items:center; justify-content:center; gap:6px; color:#888; font-size:13px; margin-top:10px; }
+.upd-fail .upd-ico svg { width:16px; height:16px; }

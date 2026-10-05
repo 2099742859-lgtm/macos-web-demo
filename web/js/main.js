@@ -356,7 +356,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 13, name: '1.0.2_beta_261005(9)' };
+const APP_VER = { code: 14, name: '1.0.2_beta_261005(10)' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -1167,6 +1167,7 @@ async function aiChat(userText) {
   finally { RATE.inFlight = false; }
 }
 async function ttsSpeak(text) {
+  if (settings.siriTTS === false) return;   /* 语音播报开关 */
   try {
     const r = await apiFetch('https://api.xiaomimimo.com/v1/chat/completions', {
       method: 'POST',
@@ -1204,8 +1205,7 @@ async function blobToWavB64(blob) {
   for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
   return btoa(bin);
 }
-async function asrListen(blob) {
-  const b64 = await blobToWavB64(blob);
+async function asrListenB64(b64) {
   const r = await apiFetch('https://api.xiaomimimo.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'api-key': TTS_KEY },
@@ -1250,12 +1250,16 @@ function siriExec(reply) {
 function openSiri() {
   const siri = $('#siri');
   siri.classList.remove('hidden');
-  /* 超时 3 分钟重开 = 清空上下文 */
+  /* 超时 3 分钟重开 = 清空上下文；否则显示上一轮内容 */
   if (window._siriClosedAt && Date.now() - window._siriClosedAt > 180000) siriHist.length = 0;
-  $('#siriText').textContent = siriHist.length ? '继续，我在听' : '我是 Siri，请讲';
-  $('#siriSub').textContent = '正在听…再点一下麦克风停止';
+  if (siriHist.length >= 2) {
+    $('#siriText').textContent = siriHist[siriHist.length - 2].content;
+    $('#siriSub').textContent = siriHist[siriHist.length - 1].content;
+  } else {
+    $('#siriText').textContent = '我是 Siri，请讲';
+    $('#siriSub').textContent = '正在听…再点一下麦克风停止';
+  }
   browserYield(true);
-  /* 开口即语音：弹出自动开始收音 */
   setTimeout(() => { const m = $('#siriMic'); if (m && !window._siriRec) m.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); }, 300);
 }
 async function siriAsk(text) {
@@ -1547,13 +1551,49 @@ function buildCC() {
     e.stopPropagation();
     if (e.key === 'Enter') siriAsk(e.target.value);
   });
-  /* 麦克风：按住/点按录音 → ASR → 提问 */
-  $('#siriMic').addEventListener('pointerdown', async e => {
+  /* 麦克风：原生 AudioRecord 优先（绕过 WebView NotReadableError），回落 getUserMedia */
+  const micBtn = $('#siriMic');
+  micBtn.innerHTML = GLYPH.mic;
+  const ttsBtn = $('#siriTts');
+  function drawTts() { ttsBtn.innerHTML = settings.siriTTS === false ? GLYPH.speakerMute : GLYPH.speaker; ttsBtn.classList.toggle('muted', settings.siriTTS === false); }
+  drawTts();
+  ttsBtn.addEventListener('pointerdown', e => {
     e.stopPropagation();
-    const btn = e.target;
-    if (window._siriRec) {
-      try { window._siriRec.stop(); } catch (err) {}
+    settings.siriTTS = settings.siriTTS === false ? true : false;
+    saveSettings(); drawTts();
+    if (settings.siriTTS === false && siriAudio) { siriAudio.pause(); siriAudio = null; }
+    notify('Siri', settings.siriTTS === false ? '语音播报已关闭' : '语音播报已开启');
+  });
+  micBtn.addEventListener('pointerdown', async e => {
+    e.stopPropagation();
+    const nativeMic = window.AndroidBridge && AndroidBridge.micStart;
+    if (window._siriRec || window._siriNative) {
+      /* 停止 → 识别 */
+      micBtn.classList.remove('rec');
+      $('#siriSub').textContent = '识别中…';
+      try {
+        let text = null;
+        if (window._siriNative) {
+          window._siriNative = false;
+          const b64 = AndroidBridge.micStop();
+          if (b64) text = await asrListenB64(b64);
+        } else {
+          window._siriRec.stop();
+          return;   /* onstop 里继续 */
+        }
+        if (text) siriAsk(text);
+        else $('#siriSub').textContent = '没听清，再说一次？';
+      } catch (err) { $('#siriSub').textContent = '识别失败，试试打字'; }
       return;
+    }
+    /* 开始录音 */
+    if (nativeMic) {
+      if (AndroidBridge.micStart()) {
+        window._siriNative = true;
+        micBtn.classList.add('rec');
+        $('#siriSub').textContent = '正在听…再点一下停止';
+        return;
+      }
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1563,32 +1603,30 @@ function buildCC() {
       rec.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         window._siriRec = null;
-        btn.classList.remove('rec');
+        micBtn.classList.remove('rec');
         $('#siriSub').textContent = '识别中…';
         try {
-          const text = await asrListen(new Blob(chunks, { type: rec.mimeType }));
+          const text = await asrListenB64(await blobToWavB64(new Blob(chunks, { type: rec.mimeType })));
           if (text) siriAsk(text);
           else $('#siriSub').textContent = '没听清，再说一次？';
         } catch (err) { $('#siriSub').textContent = '识别失败，试试打字'; }
       };
       window._siriRec = rec;
       rec.start();
-      btn.classList.add('rec');
+      micBtn.classList.add('rec');
       $('#siriSub').textContent = '正在听…再点一下停止';
     } catch (err) {
       /* 权限自检 + 引导 */
-      let msg = '麦克风不可用：' + (err.name || err.message || '未知错误');
       if (window.AndroidBridge && AndroidBridge.hasPermission && !AndroidBridge.hasPermission('RECORD_AUDIO')) {
-        msg = '没有麦克风权限';
         $('#siriSub').innerHTML = `没有麦克风权限 <span class="pill-btn on" id="siriPerm" style="padding:3px 12px;font-size:12px">去开启</span>`;
-        $('#siriPerm').addEventListener('pointerdown', e => {
-          e.stopPropagation();
+        $('#siriPerm').addEventListener('pointerdown', e2 => {
+          e2.stopPropagation();
           AndroidBridge.requestPerms();
           setTimeout(() => { if (!AndroidBridge.hasPermission('RECORD_AUDIO')) AndroidBridge.openAppSettings(); }, 1500);
         });
         return;
       }
-      $('#siriSub').textContent = msg;
+      $('#siriSub').textContent = '麦克风不可用：' + (err.name || '未知错误') + '，可尝试关闭其它占用麦克风的应用';
     }
   });
   $('#missionControl').addEventListener('pointerdown', e => { if (e.target.id === 'missionControl') e.currentTarget.classList.add('hidden'); });

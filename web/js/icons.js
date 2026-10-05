@@ -355,6 +355,8 @@ const GLYPH = {
   stage: _G('<rect x="3.5" y="6" width="9" height="12" rx="2"/><path d="M16.5 8.5h4M16.5 12h4M16.5 15.5h4"/>'),
   mirror: _G('<rect x="3" y="4.5" width="18" height="12.5" rx="2"/><path d="M12 13.5l-3.5 4h7z" fill="currentColor" stroke="none"/>'),
   cursor: _G('<path d="M6.5 3.5 L19 11.5 13.6 13.2 17.2 19.6 14.8 21 11.2 14.7 6.8 17.8 Z" fill="currentColor" stroke="none"/>'),
+  mic: _G('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M8.5 21h7"/>'),
+  speakerMute: _G('<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor" stroke="none"/><path d="M15 9l6 6M21 9l-6 6"/>'),
   /* macOS 系统设置风格双齿轮 */
   gearBig: (() => {
     const teeth = (cx, cy, r1, r2, n, color) => {
