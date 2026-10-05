@@ -2015,6 +2015,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (localStorage.getItem('mac_widgets') === '1') toggleWidgets(true);
     setInterval(refreshWidgets, 60000);
     if (settings.cursor) setCursorMode(true);
+    applyMenubarVis();
   } catch (e) { console.error(e); }
   /* 屏幕尺寸变化 → 重新计算缩放 */
   let rzTimer = null;
