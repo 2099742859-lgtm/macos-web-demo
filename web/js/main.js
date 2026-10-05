@@ -1368,12 +1368,18 @@ async function siriAsk(text) {
       $('#siriSub').textContent = !NET.online ? '离线了，先连网再聊' : '网络好像有点问题，稍后再试试';
       return;
     }
-    /* 联网搜索：异步执行后带结果继续循环 */
+    /* 联网搜索：先执行同回复里的其它动作，再搜索，继续循环 */
     const sm = reply.match(/\[SEARCH:([^\]]+)\]/);
     if (sm) {
+      const { clean: preClean, done: preDone } = siriExec(reply.replace(sm[0], ''));
+      if (preDone.length) {
+        if (!document.querySelector('#siri.hidden')) $('#siriSub').textContent = preClean + `\n⚙ ${preDone.join('、')}`;
+        else notify('Siri', preDone.join('、'));
+        finalReply = preClean || finalReply;
+      }
       $('#siriSub').textContent = '正在联网搜索…';
       const results = await webSearch(sm[1]);
-      siriHist.push({ role: 'assistant', content: reply.replace(sm[0], '').slice(0, 400) });
+      siriHist.push({ role: 'assistant', content: preClean.slice(0, 400) });
       userMsg = `（搜索「${sm[1]}」的结果：\n${results || '没有结果，凭已有知识回答'}\n）根据结果回答用户「${text}」，简明扼要`;
       round++;
       continue;
