@@ -1,11 +1,10 @@
 {
-  "code": 19,
-  "name": "1.1.2_beta_261005",
+  "code": 20,
+  "name": "1.1.2_beta_261005(2)",
   "minCode": 1,
   "notes": [
-    "Siri 可以在终端执行命令",
-    "终端支持更多命令与智能纠错",
-    "系统细节优化"
+    "修复设置开关无法关闭的问题",
+    "Siri 更稳定了"
   ],
   "files": {
     "index.html": "127342a542b012cb",
@@ -13,7 +12,7 @@
     "css/style.css": "608daa2c53e8ce50",
     "js/icons.js": "d1b8be71c1c8d91c",
     "js/apps.js": "a6821641f4d4991b",
-    "js/main.js": "f7f18c7d1bd63726",
+    "js/main.js": "f095d8df7b2dd7fd",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",
