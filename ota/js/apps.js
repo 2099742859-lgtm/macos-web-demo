@@ -2559,7 +2559,9 @@ const APPS = {
 };
 
 /* Dock 中的应用顺序 */
-const DOCK_APPS = ['finder', 'launchpad', 'safari', 'mail', 'maps', 'photos', 'messages', 'facetime', 'music', 'podcast', 'tv', 'appstore', 'settings', 'terminal', 'calculator', 'notes', 'reminders', 'calendar', 'SEP', 'trash'];
+let DOCK_APPS = JSON.parse(localStorage.getItem('mac_dock') || 'null') ||
+  ['finder', 'launchpad', 'safari', 'mail', 'maps', 'photos', 'messages', 'facetime', 'music', 'podcast', 'tv', 'appstore', 'settings', 'terminal', 'calculator', 'notes', 'reminders', 'calendar', 'SEP', 'trash'];
+function saveDock() { localStorage.setItem('mac_dock', JSON.stringify(DOCK_APPS)); }
 /* 启动台 */
 const LAUNCHPAD_APPS = ['safari', 'voicememo', 'mail', 'maps', 'photos', 'messages', 'facetime', 'music', 'podcast', 'tv', 'appstore', 'settings', 'terminal', 'calculator', 'notes', 'reminders', 'calendar', 'clock', 'weather', 'activity', 'photobooth', 'textedit', 'stickies', 'dictionary', 'finder'];
 

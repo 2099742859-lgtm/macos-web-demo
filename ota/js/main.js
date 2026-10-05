@@ -376,7 +376,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 21, name: '1.1.2_beta_261005(3)' };
+const APP_VER = { code: 22, name: '1.1.2_beta_261005(4)' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -631,21 +631,24 @@ function minimizeWindow(w) {
   if (dockIco) { const dr = dockIco.getBoundingClientRect(); tx = dr.left + dr.width / 2; ty = dr.top + dr.height / 2; }
   w.classList.add('minimizing');
   const dx = (tx - (wr.left + wr.width / 2)) / viewScale, dy = (ty - (wr.top + wr.height / 2)) / viewScale;
-  /* 精灵效果：横向压缩 + 纵向压扁吸入 Dock */
   w.style.transition = `transform ${0.45 * animK()}s cubic-bezier(.5,0,.8,.4), opacity ${0.45 * animK()}s`;
   w.style.transform = `translate(${dx}px, ${dy}px) scaleX(.34) scaleY(.03)`;
   w.style.opacity = '.2';
-  setTimeout(() => { w.style.display = 'none'; w.classList.remove('minimizing'); }, 460 * animK());
+  /* 存定时器 id，恢复时可取消（防动画竞态） */
+  if (w._minTimer) clearTimeout(w._minTimer);
+  w._minTimer = setTimeout(() => { w.style.display = 'none'; w.classList.remove('minimizing'); w._minTimer = null; }, 460 * animK());
   if (activeWinId === w.id) { activeWinId = null; setActiveApp('访达'); }
 }
 function restoreWindow(w) {
+  /* 取消未完成的吸入动画，硬切回正常态（防竞态闪烁） */
+  if (w._minTimer) { clearTimeout(w._minTimer); w._minTimer = null; }
+  w.classList.remove('minimizing');
+  w.style.transition = 'none';
+  w.style.transform = ''; w.style.opacity = '';
+  void w.offsetWidth;   /* 强制 reflow，清掉过渡残留 */
+  w.style.transition = '';
   w.style.display = 'flex';
   if (w === browserWin) { browserVisible(true); setTimeout(browserSync, 500); }
-  w.classList.add('minimizing');
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    w.style.transform = ''; w.style.opacity = '';
-    setTimeout(() => w.classList.remove('minimizing'), 480);
-  }));
   browserZCheck();
 }
 
@@ -761,8 +764,8 @@ function bindDockItem(item) {
         const a2 = it.dataset.a;
         if (a2 === 'open') openApp(id);
         else if (a2 === 'quit') closeWindow(winByApp[id]);
-        else if (a2 === 'unpin') { DOCK_APPS.splice(DOCK_APPS.indexOf(id), 1); buildDock(); updateDock(); }
-        else if (a2 === 'pin') { DOCK_APPS.splice(DOCK_APPS.indexOf('SEP'), 0, id); buildDock(); updateDock(); notify('程序坞', `「${APPS[id].name}」已固定`); }
+        else if (a2 === 'unpin') { DOCK_APPS.splice(DOCK_APPS.indexOf(id), 1); saveDock(); buildDock(); updateDock(); }
+        else if (a2 === 'pin') { DOCK_APPS.splice(DOCK_APPS.indexOf('SEP'), 0, id); saveDock(); buildDock(); updateDock(); notify('程序坞', `「${APPS[id].name}」已固定`); }
       }));
     }, 450);
   });
