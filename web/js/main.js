@@ -1165,7 +1165,8 @@ async function apiFetch(url, opts, timeoutMs, retries) {
   throw new Error('rate');
 }
 
-const siriHist = [];   /* 上下文记忆（有界：最近 16 轮） */
+const siriHist = [];   /* 上下文记忆（有界：最近 24 轮） */
+const SIRI_CTX_TTL = 30 * 60 * 1000;   /* 30 分钟无交互才算新对话 */
 async function aiChat(userText) {
   const err = rateOK();
   if (err) return '⚠ ' + err;
@@ -1192,7 +1193,8 @@ async function aiChat(userText) {
 [MUSIC:关键词] 搜索播放音乐  [TRASH] 清空废纸篓  [LAUNCHPAD] 启动台
 [SLEEP] 睡眠  [RESTART] 重启  [SHUTDOWN] 关机  [SWITCHER] App切换器
 [SPOTLIGHT:关键词] 聚焦搜索  [NOTIFY:内容] 发系统通知  [SCALE:80-140] 界面缩放
-[SEARCH:关键词] 联网搜索最新信息（新闻、实事、你不确定的知识都要搜）`;
+[SEARCH:关键词] 联网搜索最新信息（新闻、实事、你不确定的知识都要搜）
+[SHELL:命令] 在终端执行 shell 命令（如 SHELL:ls -l、SHELL:mkdir 项目）；文件操作、下载、查信息都可以用终端完成`;
     const r = await apiFetch('https://api.hcnsec.cn/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
@@ -1265,6 +1267,10 @@ function siriExec(reply) {
   eat(/\[SPOTLIGHT:([^\]]+)\]/, m => setTimeout(() => { toggleSpotlight(true); const i = $('#spInput'); if (i) { i.value = m[1]; drawSpotlight(m[1]); } }, 900), m => `聚焦搜索「${m[1]}」`);
   eat(/\[NOTIFY:([^\]]+)\]/, m => notify('Siri', m[1]), m => `发了通知「${m[1]}」`);
   eat(/\[SCALE:(\d+)\]/, m => { settings.scale = Math.max(80, Math.min(140, +m[1])); saveSettings(); applyStage(); }, m => `界面缩放到${m[1]}%`);
+  eat(/\[SHELL:([^\]]+)\]/, m => {
+    openApp('terminal');
+    setTimeout(() => { if (window.__termExec) window.__termExec(m[1]); }, 700);
+  }, m => `终端执行「${m[1]}」`);
   eat(/\[NOTE:([^\]]+)\]/, m => {
     const notes = JSON.parse(localStorage.getItem('mac_notes') || '[]');
     notes.unshift({ t: m[1].slice(0, 12), b: m[1] });
@@ -1284,8 +1290,8 @@ function siriExec(reply) {
 function openSiri() {
   const siri = $('#siri');
   siri.classList.remove('hidden');
-  /* 超时 3 分钟重开 = 清空上下文；否则显示上一轮内容 */
-  if (window._siriClosedAt && Date.now() - window._siriClosedAt > 180000) siriHist.length = 0;
+  /* 超时 30 分钟重开 = 清空上下文；否则显示上一轮内容 */
+  if (window._siriClosedAt && Date.now() - window._siriClosedAt > SIRI_CTX_TTL) siriHist.length = 0;
   if (siriHist.length >= 2) {
     $('#siriText').textContent = siriHist[siriHist.length - 2].content;
     $('#siriSub').textContent = siriHist[siriHist.length - 1].content;
@@ -1294,7 +1300,7 @@ function openSiri() {
     $('#siriSub').textContent = '有什么可以帮你？';
   }
   browserYield(true);
-  setTimeout(() => $('#siriInput').focus(), 250);
+  /* 不自动聚焦：点击输入框才弹键盘 */
 }
 async function siriAsk(text) {
   if (!text.trim()) return;
@@ -1333,9 +1339,9 @@ async function siriAsk(text) {
     userMsg = `（系统回报：已执行 ${done.join('、')}。如果任务已完成就直接总结回复用户，不要重复动作；如果还有后续步骤，继续输出动作标记。）`;
     round++;
   }
-  while (siriHist.length > 32) siriHist.shift();
   siriHist.push({ role: 'user', content: text.slice(0, 400) });
-  if (finalReply) { siriHist.push({ role: 'assistant', content: finalReply.slice(0, 400) }); while (siriHist.length > 32) siriHist.shift(); }
+  if (finalReply) { siriHist.push({ role: 'assistant', content: finalReply.slice(0, 400) }); }
+  while (siriHist.length > 48) siriHist.shift();
   /* 面板已关 = 后台任务完成，发通知 */
   if (document.querySelector('#siri.hidden') && finalReply) notify('Siri', finalReply.slice(0, 80));
 }
@@ -1604,6 +1610,8 @@ function buildCC() {
     const s = $('#siri');
     if (!s.classList.contains('hidden') && !e.target.closest('#siri')) closeSiri();
   });
+  /* 输入框点击才聚焦弹键盘 */
+  $('#siriInput').addEventListener('pointerdown', e => { e.stopPropagation(); e.target.focus(); });
   $('#siriInput').addEventListener('keydown', e => {
     e.stopPropagation();
     if (e.key === 'Enter') siriAsk(e.target.value);

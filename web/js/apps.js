@@ -438,8 +438,83 @@ const APPS = {
         print(`<span class="tp">user@MacBook-Air</span> ${cwd === 'User' ? '~' : cwd} % ${esc(raw)}`);
         if (!raw) return;
         cmdHist.push(raw);
+        /* 长命令链：&& 和 ; 顺序执行 */
+        const chain = raw.split(/\s*(?:&&|;)\s*/).filter(Boolean);
+        for (const piece of chain) {
+          await runOne(piece);
+        }
+        return;
+
+        async function runOne(raw) {
         const [cmd, ...args] = raw.split(/\s+/);
         const rest = args.join(' ');
+        /* nano / vim → 真·打开文本编辑器 */
+        if (cmd === 'nano' || cmd === 'vim' || cmd === 'vi') {
+          if (!rest) return print(`${cmd}: 需要文件名`);
+          if (!FILE_CONTENTS[rest]) { FILE_CONTENTS[rest] = ''; if (!kids().includes(rest)) kids().push(rest); saveFiles(); saveVFS(); }
+          openApp('textedit', { file: rest });
+          return print(`[${cmd}] 已在文本编辑器中打开 ${esc(rest)}`);
+        }
+        if (cmd === 'cp') {
+          const [a2, b2] = args;
+          if (!a2 || !b2) return print('usage: cp <源> <目标>');
+          if (!FILE_CONTENTS[a2] && !VFS[a2]) return print(`cp: ${esc(a2)}: No such file or directory`);
+          if (VFS[a2]) VFS[b2] = { children: [...VFS[a2].children] };
+          else FILE_CONTENTS[b2] = FILE_CONTENTS[a2];
+          if (!kids().includes(b2)) kids().push(b2);
+          saveFiles(); saveVFS();
+          return;
+        }
+        if (cmd === 'head' || cmd === 'tail') {
+          const f = fileContent(args[args.length - 1]);
+          if (f === undefined) return print(`${cmd}: ${esc(args[args.length - 1] || '')}: No such file or directory`);
+          const lines = String(f).split('\n');
+          const n = (() => { const m = raw.match(/-n\s*(\d+)/); return m ? +m[1] : 10; })();
+          const part = cmd === 'head' ? lines.slice(0, n) : lines.slice(-n);
+          return print(part.map(esc).join('<br>'));
+        }
+        if (cmd === 'wc') {
+          const f = fileContent(rest);
+          if (f === undefined) return print(`wc: ${esc(rest)}: No such file or directory`);
+          const s = String(f);
+          return print(`${s.split('\n').length} ${s.split(/\s+/).filter(Boolean).length} ${s.length} ${esc(rest)}`);
+        }
+        if (cmd === 'grep') {
+          const pat = args[0], fn2 = args[1];
+          if (!pat || !fn2) return print('usage: grep <模式> <文件>');
+          const f = fileContent(fn2);
+          if (f === undefined) return print(`grep: ${esc(fn2)}: No such file or directory`);
+          const hits = String(f).split('\n').filter(l => l.includes(pat));
+          return print(hits.length ? hits.map(l => esc(l).replace(esc(pat), `<span style="color:#f66">${esc(pat)}</span>`)).join('<br>') : '(无匹配)');
+        }
+        if (cmd === 'find') {
+          const q = rest.replace(/^\./, '').trim();
+          const all = [];
+          Object.keys(VFS).forEach(d => (VFS[d].children || []).forEach(f => all.push(f)));
+          Object.keys(FILE_CONTENTS).forEach(f => all.push(f));
+          const hits = [...new Set(all)].filter(f => !q || f.toLowerCase().includes(q.toLowerCase()));
+          return print(hits.slice(0, 20).map(esc).join('<br>') || '(无结果)');
+        }
+        if (cmd === 'stat') {
+          const isD = !!VFS[rest], c = FILE_CONTENTS[rest];
+          if (!isD && c === undefined) return print(`stat: ${esc(rest)}: No such file or directory`);
+          const size = isD ? (VFS[rest].children.length + ' 项') : String(c).length + ' B';
+          return print(`  File: ${esc(rest)}<br>  Size: ${size}<br>Type: ${isD ? 'directory' : 'regular file'}`);
+        }
+        if (cmd === 'base64') {
+          const f = fileContent(rest);
+          if (f === undefined) return print(`base64: ${esc(rest)}: No such file or directory`);
+          return print(btoa(unescape(encodeURIComponent(String(f)))).slice(0, 200));
+        }
+        if (cmd === 'echo' && rest.includes('>')) {
+          const m2 = rest.match(/^(.*?)\s*>\s*(\S+)$/);
+          if (m2) {
+            FILE_CONTENTS[m2[2]] = m2[1];
+            if (!kids().includes(m2[2])) kids().push(m2[2]);
+            saveFiles(); saveVFS();
+            return;
+          }
+        }
         if (cmd === 'echo') return print(esc(rest) || '');
         if (cmd === 'say') return notify('终端', `🔊 ${rest || '……'}`);
         if (cmd === 'cd') {
@@ -603,10 +678,22 @@ const APPS = {
           return;
         }
         if (cmd === 'sudo') return print('user is not in the sudoers file. This incident will be reported.');
-        if (cmd === 'vim' || cmd === 'vi' || cmd === 'nano') return print(`${cmd}: not available in this demo`);
         if (CMDS[cmd]) return CMDS[cmd](rest);
-        print(`zsh: command not found: ${esc(cmd)}`);
+        /* 错误纠正：找最相近的命令 */
+        const KNOWN = ['ls','cd','pwd','cat','echo','mkdir','touch','rm','mv','cp','grep','find','wc','head','tail','stat','base64','open','ping','curl','wget','zip','unzip','nano','vim','clear','exit','history','whoami','hostname','date','uname','uptime','df','top','ps','tree','which','man','neofetch','weather','fortune','say','browse','ip','dig','nslookup','traceroute','battery','bc','brew','matrix','cowsay','sudo','cal','vm_stat','htop', ...Object.keys(CMDS)];
+        const dist = (a, b) => {
+          const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+          for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+          for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+            dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+          return dp[a.length][b.length];
+        };
+        const near = KNOWN.filter(k => dist(cmd, k) <= 2).sort((a, b) => dist(cmd, a) - dist(cmd, b))[0];
+        print(`zsh: command not found: ${esc(cmd)}` + (near ? `<br><span class="tc">zsh: 你是不是想输入「${near}」？</span>` : ''));
+        }
       });
+      /* Siri/外部程序执行接口 */
+      window.__termExec = cmd => { inp.value = cmd; inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); };
       el.querySelector('.term').addEventListener('click', () => inp.focus());
     }
   },
