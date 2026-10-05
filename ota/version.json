@@ -1,10 +1,10 @@
 {
-  "code": 18,
-  "name": "1.1.1_beta_261005",
+  "code": 19,
+  "name": "1.1.2_beta_261005",
   "minCode": 1,
   "notes": [
-    "Siri 更聪明了",
-    "一些应用焕然一新",
+    "Siri 可以在终端执行命令",
+    "终端支持更多命令与智能纠错",
     "系统细节优化"
   ],
   "files": {
@@ -13,7 +13,7 @@
     "css/style.css": "608daa2c53e8ce50",
     "js/icons.js": "d1b8be71c1c8d91c",
     "js/apps.js": "8f6acee0702d993c",
-    "js/main.js": "71be149c6414dc4c",
+    "js/main.js": "07a63701dbf8b3ee",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",
