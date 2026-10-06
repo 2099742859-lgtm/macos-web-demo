@@ -6,12 +6,12 @@
     "修复了一些已知问题"
   ],
   "files": {
-    "index.html": "9e1c9772bdd244c5",
+    "index.html": "5bf16bc4683be4b6",
     "jszip.min.js": "acc7e41455a80765",
-    "css/style.css": "608daa2c53e8ce50",
+    "css/style.css": "e7232d0176285709",
     "js/icons.js": "d1b8be71c1c8d91c",
     "js/apps.js": "7cd3c67a92ce229f",
-    "js/main.js": "d381acab65c9ede6",
+    "js/main.js": "7f8cd35d5b54566f",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",

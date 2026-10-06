@@ -1876,6 +1876,9 @@ function buildCtx() {
   });
 }
 
+/* 锁屏（Siri/快捷键调用） */
+function lockScreen() { sleep(); }
+
 /* ───────── 时钟 & 电池 ───────── */
 function startClock() {
   const dow = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
