@@ -220,19 +220,6 @@ const APPS = {
         </div>
         <div class="sf-view" id="sfView"></div></div>`;
       const view = el.querySelector('#sfView'), urlInp = el.querySelector('#sfUrl');
-      /* Web 部署：无原生浏览器层，iframe 渲染 */
-      if (window.__isWebDeploy) {
-        view.innerHTML = '<iframe id="sfFrame" style="width:100%;height:100%;border:none;background:#fff" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>';
-        win.__safariGo = url => {
-          if (!/^https?:\/\//i.test(url)) url = (url.includes('.') && !url.includes(' '))
-            ? 'https://' + url : 'https://www.bing.com/search?q=' + encodeURIComponent(url);
-          el.querySelector('#sfFrame').src = url;
-          urlInp.value = url;
-        };
-        el.querySelector('#sfUrl').addEventListener('keydown', e => { if (e.key === 'Enter') win.__safariGo(e.target.value); });
-        win.__safariGo('https://www.bing.com');
-        return;
-      }
       function startPage() {
         view.innerHTML = `<div class="sf-body"><div class="sf-h">个人收藏</div>
           <div class="sf-fav">${FAVS.map(f =>
@@ -1442,6 +1429,19 @@ const APPS = {
           });
         },
         update: () => {
+          /* Web 部署版：无 OTA，显示源码地址 */
+          if (window.__isWebDeploy) {
+            main.innerHTML = `<h2>软件更新</h2>
+            <div class="upd-hero">
+              <div class="upd-gear-big">${GLYPH.gearBig}</div>
+              <div class="upd-title">macOS Sequoia</div>
+              <div class="upd-ver">Web 部署版 · 始终是最新</div>
+              <div class="upd-btn" id="updRepo">访问项目仓库</div>
+            </div>`;
+            main.querySelector('#updRepo').addEventListener('click', () =>
+              window.open('https://github.com/2099742859-lgtm/macos-web-demo', '_blank'));
+            return;
+          }
           /* 上次更新记录（重启后仍显示） */
           let lastUpd = null;
           try { lastUpd = JSON.parse(localStorage.getItem('mac_last_update') || 'null'); } catch (e) {}
