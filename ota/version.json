@@ -1,8 +1,9 @@
 {
-  "code": 28,
-  "name": "1.1.4_beta_261005",
+  "code": 29,
+  "name": "1.1.4_beta_261005(2)",
   "minCode": 1,
   "notes": [
+    "修复多语言切换刷新后失效",
     "修复了一些已知问题"
   ],
   "files": {
@@ -10,8 +11,8 @@
     "jszip.min.js": "acc7e41455a80765",
     "css/style.css": "5d2403bd195064b6",
     "js/icons.js": "d1b8be71c1c8d91c",
-    "js/apps.js": "250118f568f0bd96",
-    "js/main.js": "bb4f60d7245d3750",
+    "js/apps.js": "99542693a1f13b1c",
+    "js/main.js": "e1fc3c3bcbffac5c",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",

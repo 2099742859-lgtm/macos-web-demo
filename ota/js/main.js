@@ -387,7 +387,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 28, name: '1.1.4_beta_261005' };
+const APP_VER = { code: 29, name: '1.1.4_beta_261005(2)' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -519,29 +519,49 @@ const IDB = {
   },
 };
 
-/* ───────── AI 界面翻译（多语言） ───────── */
+/* ───────── AI 界面翻译（多语言 · 实验性） ───────── */
 const LANGS = { 'zh': '简体中文', 'en': 'English', 'ja': '日本語', 'zht': '繁體中文' };
+/* 缓存结构：{ "原文": "译文" } 字典，按内容对齐不按位置 */
+function langDict(lang) { try { return JSON.parse(localStorage.getItem('mac_ui_' + lang) || '{}'); } catch (e) { return {}; } }
+function collectTranslatable() {
+  const nodes = [];
+  const sels = '.mb-item, .set-row > span:first-child, .set-main h2, .pill-btn, .upd-btn, .dock-tip';
+  [document.getElementById('menubar'), document.getElementById('dock'), document.getElementById(winByApp.settings)]
+    .forEach(root => {
+      if (!root) return;
+      root.querySelectorAll(sels).forEach(el => {
+        if (el.children.length === 0 && el.textContent.trim() && el.textContent.trim().length < 30) nodes.push(el);
+      });
+    });
+  return nodes;
+}
+function applyLangDict(lang) {
+  const dict = langDict(lang);
+  if (!Object.keys(dict).length) return 0;
+  let n = 0;
+  collectTranslatable().forEach(el => {
+    const orig = el.dataset.orig || el.textContent.trim();
+    if (!el.dataset.orig) el.dataset.orig = orig;   /* 记住原文供还原 */
+    if (dict[orig]) { el.textContent = dict[orig]; n++; }
+  });
+  return n;
+}
+function restoreLang() {
+  collectTranslatable().forEach(el => {
+    if (el.dataset.orig) { el.textContent = el.dataset.orig; delete el.dataset.orig; }
+  });
+}
 async function translateUI(lang) {
   settings.lang = lang; saveSettings();
-  if (lang === 'zh') { localStorage.removeItem('mac_ui_lang'); location.reload(); return; }
-  /* 收集可翻译文本（菜单栏 + 当前设置页） */
-  const nodes = [];
-  const walk = root => {
-    if (!root) return;
-    root.querySelectorAll('.mb-item, .set-row span:first-child, h2, .pill-btn, .upd-btn').forEach(el => {
-      if (el.children.length === 0 && el.textContent.trim().length < 30) nodes.push(el);
-    });
-  };
-  walk(document.querySelector('.menubar') || document.querySelector('#menubar') || document.body.firstElementChild);
-  const setWin = document.getElementById(winByApp.settings);
-  if (setWin) walk(setWin);
+  if (lang === 'zh') { restoreLang(); notify('语言', '已切回简体中文'); return; }
+  notify('语言', 'AI 翻译中…');
+  const nodes = collectTranslatable();
   if (!nodes.length) { notify('语言', '没有可翻译的内容'); return; }
-  const origs = nodes.map(n => n.textContent.trim());
-  const cache = JSON.parse(localStorage.getItem('mac_ui_' + lang) || 'null');
-  let translated = cache;
-  if (!cache || cache.length !== origs.length) {
-    notify('语言', 'AI 翻译中…');
-    /* 直接调 LLM（不走 Siri 限流） */
+  const dict = langDict(lang);
+  const origs = nodes.map(n => { if (!n.dataset.orig) n.dataset.orig = n.textContent.trim(); return n.dataset.orig; });
+  const missing = origs.filter(o => !dict[o]);
+  if (missing.length) {
+    /* 对象返回 + 严格校验字符串数组 */
     let r = null;
     try {
       const resp = await apiFetch('https://api.hcnsec.cn/v1/chat/completions', {
@@ -549,7 +569,11 @@ async function translateUI(lang) {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
         body: JSON.stringify({
           model: 'longcat-2.5',
-          messages: [{ role: 'user', content: `把以下界面文案翻译成${LANGS[lang]}，只回 JSON 数组，保持顺序，不要多余内容：\n${JSON.stringify(origs)}` }],
+          messages: [
+            { role: 'system', content: '你是翻译器。只输出 JSON 对象 {"t": [...]}，t 是译文字符串数组，与输入一一对应。不要输出任何其它内容。' },
+            { role: 'user', content: `翻译成${LANGS[lang]}：
+${JSON.stringify(missing)}` },
+          ],
           max_tokens: 2000,
         }),
       }, 30000, 1);
@@ -558,14 +582,21 @@ async function translateUI(lang) {
     } catch (e) { notify('语言', '翻译请求失败'); return; }
     if (!r) { notify('语言', '翻译失败，稍后再试'); return; }
     try {
-      const m = r.replace(/```json|```/g, '').match(/\[[\s\S]*\]/);
-      translated = JSON.parse(m[0]);
-      if (Array.isArray(translated) && translated.length === origs.length) localStorage.setItem('mac_ui_' + lang, JSON.stringify(translated));
-      else throw 0;
+      const m = r.replace(/```json|```/g, '').match(/\{[\s\S]*"t"\s*:\s*\[[\s\S]*\][\s\S]*\}/);
+      const parsed = JSON.parse(m[0]);
+      if (!Array.isArray(parsed.t) || parsed.t.length !== missing.length || !parsed.t.every(s => typeof s === 'string')) throw 0;
+      missing.forEach((o, i) => dict[o] = parsed.t[i]);
+      localStorage.setItem('mac_ui_' + lang, JSON.stringify(dict));
     } catch (e) { notify('语言', '翻译结果解析失败'); return; }
   }
-  nodes.forEach((n, i) => { if (translated[i]) n.textContent = translated[i]; });
-  notify('语言', `已切换到 ${LANGS[lang]}`);
+  applyLangDict(lang);
+  notify('语言', `已切换到 ${LANGS[lang]}（实验性：部分界面）`);
+}
+/* 启动时应用缓存语言（刷新不掉） */
+function bootApplyLang() {
+  if (settings.lang && settings.lang !== 'zh') {
+    setTimeout(() => { const n = applyLangDict(settings.lang); }, 600);
+  }
 }
 
 /* ───────── 自绘弹层（替代 prompt/confirm） ───────── */
@@ -2127,7 +2158,7 @@ window.onerror = function (msg, src, line) {
 };
 window.addEventListener('DOMContentLoaded', () => {
   [() => applyDark(darkMode), () => setWallpaper(wallIdx), buildDock, buildMenubar, buildCC,
-   buildDeskIcons, buildCtx, buildLockLogin, startClock, drawNotifList, buildQuickNote, buildRubberBand, buildTouchGestures, buildCursor]
+   buildDeskIcons, buildCtx, buildLockLogin, startClock, drawNotifList, buildQuickNote, buildRubberBand, buildTouchGestures, buildCursor, bootApplyLang]
     .forEach(f => { try { f(); } catch (err) { console.error(err); } });
   /* 恢复保存的偏好 */
   try {

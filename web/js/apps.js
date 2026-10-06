@@ -1414,7 +1414,7 @@ const APPS = {
           main.innerHTML += `<h2 style="margin-top:16px">语言与地区</h2>` +
             card(langs.map(([v, n]) =>
               `<div class="set-row lang-row" data-l="${v}"><span>${n}</span><span style="color:#0A84FF">${curLang === v ? '✓' : ''}</span></div>`).join('')) +
-            `<p style="color:#888;font-size:12.5px">非中文界面由 AI 实时翻译并缓存</p>`;
+            `<p style="color:#888;font-size:12.5px">实验性：AI 翻译菜单栏/Dock/设置等主要界面，应用内部暂不覆盖</p>`;
           main.querySelectorAll('.lang-row').forEach(r => r.addEventListener('click', () => {
             if (r.dataset.l !== curLang) translateUI(r.dataset.l);
           }));
