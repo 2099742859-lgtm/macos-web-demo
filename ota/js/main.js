@@ -1366,25 +1366,24 @@ function siriExec(reply) {
     openApp('terminal');
     setTimeout(() => { if (window.__termExec) window.__termExec(m[1]); }, 700);
   }, m => `终端执行「${m[1]}」`);
-  /* 创建文件：桌面/文稿 */
-  eat(/\[CREATE:([^|\]]+)\|([^\]]*)\]/, m => {
-    const name = m[1].trim(), content = m[2];
+  /* 创建文件：桌面/文稿（宽容匹配：竖线可省略，内容可空） */
+  eat(/\[CREATE:([^|\]]+?)(?:\|([^\]]*))?\]/, m => {
+    const name = m[1].trim(), content = m[2] || '';
     FILE_CONTENTS[name] = content;
     const doc = VFS['文稿'] ? VFS['文稿'].children : null;
     if (doc && !doc.includes(name)) doc.push(name);
     saveFiles(); saveVFS();
-    /* 桌面快捷图标 */
     if (/^桌面|desktop/i.test(name) || m[1].includes('桌面')) {
       const realName = name.replace(/桌面\/?/i, '');
       FILE_CONTENTS[realName] = content;
-      if (doc) { doc.splice(doc.indexOf(name), 1); if (!doc.includes(realName)) doc.push(realName); }
+      if (doc) { const i2 = doc.indexOf(name); if (i2 >= 0) doc.splice(i2, 1); if (!doc.includes(realName)) doc.push(realName); }
       addDeskIcon(realName, 'icons/filetext.png', 'txt');
       saveFiles(); saveVFS();
     } else {
       addDeskIcon(name, 'icons/filetext.png', 'txt');
     }
     notify('访达', `已创建「${name}」`);
-  }, m => `创建了文件「${m[1]}」`);
+  }, m => `创建了文件「${m[1].trim()}」`);
   eat(/\[NOTE:([^\]]+)\]/, m => {
     const notes = JSON.parse(localStorage.getItem('mac_notes') || '[]');
     notes.unshift({ t: m[1].slice(0, 12), b: m[1] });
@@ -1794,10 +1793,11 @@ function buildCC() {
   $('#lpInput').addEventListener('input', e => drawLaunchpad(e.target.value));
 }
 
-/* ───────── 桌面图标 ───────── */
-const deskIcons = [
+/* ───────── 桌面图标（持久化） ───────── */
+const deskIcons = JSON.parse(localStorage.getItem('mac_desk') || 'null') || [
   ['Macintosh HD', 'icons/disk.png', 'hd'], ['项目提案.pdf', 'icons/filepdf.png', 'pdf'], ['旅行照片.png', 'icons/fileimage.png', 'img'], ['README.txt', 'icons/filetext.png', 'txt'],
 ];
+function saveDesk() { localStorage.setItem('mac_desk', JSON.stringify(deskIcons)); }
 function buildDeskIcons() {
   $('#deskIcons').innerHTML = deskIcons.map((d, i) =>
     `<div class="desk-icon" data-i="${i}"><div class="di-img">${d[1].startsWith('<') ? d[1] : `<img src="${d[1]}" draggable="false">`}</div><div class="di-name">${d[0]}</div></div>`).join('');
@@ -1822,6 +1822,7 @@ function addDeskIcon(name, ico, type) {
   if (ico === '📁') ico = 'icons/folder.png';
   if (ico === '🖼️') ico = 'icons/fileimage.png';
   deskIcons.push([name, ico, type || 'txt']);
+  saveDesk();
   buildDeskIcons();
   notify('访达', `已创建「${name}」`);
 }
