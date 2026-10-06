@@ -1,6 +1,6 @@
 {
-  "code": 24,
-  "name": "1.1.3_beta_261005(2)",
+  "code": 25,
+  "name": "1.1.3_beta_261005(3)",
   "minCode": 1,
   "notes": [
     "修复了一些已知问题"
@@ -11,7 +11,7 @@
     "css/style.css": "e7232d0176285709",
     "js/icons.js": "d1b8be71c1c8d91c",
     "js/apps.js": "7cd3c67a92ce229f",
-    "js/main.js": "7f8cd35d5b54566f",
+    "js/main.js": "1d14e45fc0f00286",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",
