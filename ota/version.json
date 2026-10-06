@@ -35,7 +35,7 @@
     }
   ],
   "files": {
-    "index.html": "5bf16bc4683be4b6",
+    "index.html": "6f27edbc150d1b05",
     "jszip.min.js": "acc7e41455a80765",
     "covers/m1.jpg": "f0908d12aa7e16a7",
     "covers/m2.jpg": "bc5576fe0f426e6f",
@@ -85,9 +85,11 @@
     "icons/trashempty.png": "70f3fa0e2be0d347",
     "icons/trashfull.png": "e40beae54558709b",
     "icons/tv.png": "1560a4ef8a8ef3c2",
-    "js/apps.js": "9b9dc79bf2dc4f62",
-    "js/icons.js": "d1b8be71c1c8d91c",
-    "js/main.js": "4d0a659f0cd270db",
+    "js/apps.js": "a29fa34939e0e50a",
+    "js/icons.js": "4ee90cda29e1ae9f",
+    "js/main.js": "8c52ba9d6d74cc50",
+    "js/siri.js": "cc98d416b42a583e",
+    "js/ota.js": "0a6be0f3ac7bae65",
     "photos/p1.jpg": "7097930ebf59e14b",
     "photos/p10.jpg": "53c07273c5e05b43",
     "photos/p11.jpg": "c40cc0cc83eb251c",
