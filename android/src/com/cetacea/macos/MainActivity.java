@@ -73,7 +73,7 @@ public class MainActivity extends Activity {
         s.setAllowFileAccessFromFileURLs(true);
         s.setAllowUniversalAccessFromFileURLs(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setBlockNetworkImage(false);
         s.setLoadsImagesAutomatically(true);
         s.setGeolocationEnabled(true);
@@ -81,12 +81,15 @@ public class MainActivity extends Activity {
         w.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
-                request.grant(request.getResources());
+                /* 只放行本地 UI（file://），外部网页一律拒绝 */
+                String o = request.getOrigin() != null ? request.getOrigin().toString() : "";
+                if (o.startsWith("file://")) request.grant(request.getResources());
+                else request.deny();
             }
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin,
                     GeolocationPermissions.Callback callback) {
-                callback.invoke(origin, true, false);
+                callback.invoke(origin, origin != null && origin.startsWith("file://"), false);
             }
             @Override
             public boolean onShowFileChooser(WebView view,
@@ -149,7 +152,7 @@ public class MainActivity extends Activity {
         bs.setLoadWithOverviewMode(true);
         bs.setBuiltInZoomControls(true);
         bs.setDisplayZoomControls(false);
-        bs.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        bs.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         bs.setGeolocationEnabled(true);
         /* 电脑模式：桌面版 Chrome/Mac UA */
         bs.setUserAgentString("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
@@ -166,12 +169,15 @@ public class MainActivity extends Activity {
         w.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
-                request.grant(request.getResources());
+                /* 只放行本地 UI（file://），外部网页一律拒绝 */
+                String o = request.getOrigin() != null ? request.getOrigin().toString() : "";
+                if (o.startsWith("file://")) request.grant(request.getResources());
+                else request.deny();
             }
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin,
                     GeolocationPermissions.Callback callback) {
-                callback.invoke(origin, true, false);
+                callback.invoke(origin, origin != null && origin.startsWith("file://"), false);
             }
         });
         /* 标签页 WebView 也支持下载 */
