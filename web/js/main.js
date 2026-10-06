@@ -517,6 +517,37 @@ const IDB = {
   },
 };
 
+/* ───────── AI 界面翻译（多语言） ───────── */
+const LANGS = { 'zh': '简体中文', 'en': 'English', 'ja': '日本語', 'zht': '繁體中文' };
+async function translateUI(lang) {
+  settings.lang = lang; saveSettings();
+  if (lang === 'zh') { localStorage.removeItem('mac_ui_lang'); location.reload(); return; }
+  /* 收集可翻译文本（菜单栏 + 当前设置页） */
+  const nodes = [];
+  const walk = root => {
+    root.querySelectorAll('.mb-item, .set-row span:first-child, h2, .pill-btn, .upd-btn').forEach(el => {
+      if (el.children.length === 0 && el.textContent.trim().length < 30) nodes.push(el);
+    });
+  };
+  walk($('#menuBar'));
+  const setWin = document.getElementById(winByApp.settings);
+  if (setWin) walk(setWin);
+  const cache = JSON.parse(localStorage.getItem('mac_ui_' + lang) || 'null');
+  const origs = nodes.map(n => n.textContent.trim());
+  let translated = cache;
+  if (!cache || cache.length !== origs.length) {
+    notify('语言', 'AI 翻译中…');
+    const r = await aiChat(`把以下界面文案翻译成${LANGS[lang]}，只回 JSON 数组，保持顺序，不要多余内容：\n${JSON.stringify(origs)}`);
+    try {
+      const m = r.replace(/```json|```/g, '').match(/\[[\s\S]*\]/);
+      translated = JSON.parse(m[0]);
+      if (Array.isArray(translated) && translated.length === origs.length) localStorage.setItem('mac_ui_' + lang, JSON.stringify(translated));
+    } catch (e) { notify('语言', '翻译失败，稍后再试'); return; }
+  }
+  nodes.forEach((n, i) => { if (translated[i]) n.textContent = translated[i]; });
+  notify('语言', `已切换到 ${LANGS[lang]}`);
+}
+
 /* ───────── 表情与符号选择器 ───────── */
 const EMOJI_CATS = {
   '笑脸': ['😀','😄','😂','🤣','😊','😍','🤔','😅','😭','😡','🥳','😴','🤯','😎','🥺','😤'],

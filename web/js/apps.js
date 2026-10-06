@@ -1400,6 +1400,16 @@ const APPS = {
              <div class="set-row" data-g="update"><span>软件更新</span>${chev}</div>
              <div class="set-row" data-g="storage"><span>储存空间</span>${chev}</div>`) +
             card(row('隔空投送与接力', chev) + row('日期与时间', chev));
+          /* 语言与地区（AI 实时翻译） */
+          const langs = [['zh', '简体中文'], ['en', 'English'], ['ja', '日本語'], ['zht', '繁體中文']];
+          const curLang = settings.lang || 'zh';
+          main.innerHTML += `<h2 style="margin-top:16px">语言与地区</h2>` +
+            card(langs.map(([v, n]) =>
+              `<div class="set-row lang-row" data-l="${v}"><span>${n}</span><span style="color:#0A84FF">${curLang === v ? '✓' : ''}</span></div>`).join('')) +
+            `<p style="color:#888;font-size:12.5px">非中文界面由 AI 实时翻译并缓存</p>`;
+          main.querySelectorAll('.lang-row').forEach(r => r.addEventListener('click', () => {
+            if (r.dataset.l !== curLang) translateUI(r.dataset.l);
+          }));
           main.querySelectorAll('.set-row[data-g]').forEach(r => r.addEventListener('click', () => {
             const g = r.dataset.g;
             if (g === 'about') openApp('about');
