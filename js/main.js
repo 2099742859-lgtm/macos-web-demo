@@ -535,6 +535,25 @@ function macPrompt(title, def) {
   });
 }
 
+/* ───────── 全局剪贴板（Ctrl+C/V 跨应用联动） ───────── */
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const ae = document.activeElement;
+  const editable = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable);
+  if (e.key === 'c' && !editable) {
+    const sel = window.getSelection().toString();
+    if (sel && navigator.clipboard) navigator.clipboard.writeText(sel).then(() => showOSD('doc', 1)).catch(() => {});
+  }
+  if (e.key === 'v' && editable && navigator.clipboard) {
+    navigator.clipboard.readText().then(t => {
+      if (!t) return;
+      const p = ae.selectionStart != null ? ae.selectionStart : ae.value.length;
+      ae.value = ae.value.slice(0, p) + t + ae.value.slice(ae.selectionEnd != null ? ae.selectionEnd : p);
+      ae.dispatchEvent(new Event('input', { bubbles: true }));
+    }).catch(() => {});
+  }
+});
+
 /* ───────── 表情与符号选择器 ───────── */
 const EMOJI_CATS = {
   '笑脸': ['😀','😄','😂','🤣','😊','😍','🤔','😅','😭','😡','🥳','😴','🤯','😎','🥺','😤'],
@@ -567,8 +586,10 @@ function openEmoji() {
   $('#ejSearch').value = '';
 }
 
-/* ───────── 通知 ───────── */
+/* ───────── 通知（Pub/Sub：Siri/系统动作都进历史） ───────── */
 const notifHistory = [];
+const notifySubs = [];
+function onNotify(fn) { notifySubs.push(fn); }   /* 订阅通知（Pub/Sub 接口） */
 /* 通知来源 → 图标（系统类来源用对应真实图标） */
 const NOTIF_ICONS = {
   '无线局域网': GLYPH.wifi, '蓝牙': GLYPH.bt, '网络': GLYPH.globe, '专注模式': GLYPH.moon,
@@ -596,6 +617,7 @@ function notify(app, text) {
   notifHistory.unshift({ app, text, icon: iconHTML });
   if (notifHistory.length > 8) notifHistory.pop();
   drawNotifList();
+  notifySubs.forEach(fn => { try { fn(app, text); } catch (e) {} });
 }
 function drawNotifList() {
   const list = $('#ncList');
@@ -701,6 +723,7 @@ function focusWindow(w) {
 function setActiveApp(name) { $('#mbAppName').textContent = name; }
 
 function minimizeWindow(w) {
+  w.dataset.minimized = '1';   /* 游戏定时器据此挂起 */
   if (w === browserWin) browserVisible(false);
   const appId = w.dataset.app;
   const dockIco = document.querySelector(`.dock-item[data-app="${appId}"] .dock-ico`);
@@ -718,6 +741,7 @@ function minimizeWindow(w) {
   if (activeWinId === w.id) { activeWinId = null; setActiveApp('访达'); }
 }
 function restoreWindow(w) {
+  delete w.dataset.minimized;
   /* 取消未完成的吸入动画，硬切回正常态（防竞态闪烁） */
   if (w._minTimer) { clearTimeout(w._minTimer); w._minTimer = null; }
   w.classList.remove('minimizing');
