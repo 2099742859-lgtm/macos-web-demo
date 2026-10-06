@@ -2514,6 +2514,50 @@ const APPS = {
     }
   },
 
+  /* ─── GitHub（点击拉起浏览器开仓库） ─── */
+  github: {
+    name: 'GitHub', icon: () => '<img src="icons/github.png" draggable="false" style="border-radius:22%">', w: 420, h: 300,
+    render(el) {
+      const REPO = 'https://github.com/2099742859-lgtm/macos-web-demo';
+      el.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px">
+        <img src="icons/github.png" style="width:76px;height:76px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.2)">
+        <div style="text-align:center"><b style="font-size:17px">macOS Web Demo</b><br>
+        <span style="font-size:13px;color:#888">2099742859-lgtm</span></div>
+        <span class="pill-btn on" id="ghOpen" style="font-size:14px;padding:9px 26px">在浏览器中打开仓库</span>
+        <span class="pill-btn" id="ghRel">查看 Releases</span></div>`;
+      const open = url => {
+        if (window.AndroidBridge && AndroidBridge.open) AndroidBridge.open(url);
+        else window.open(url, '_blank');
+      };
+      el.querySelector('#ghOpen').addEventListener('click', () => open(REPO));
+      el.querySelector('#ghRel').addEventListener('click', () => open(REPO + '/releases'));
+    }
+  },
+
+  /* ─── 反馈（意见直提 GitHub Issues） ─── */
+  feedback: {
+    name: '反馈', icon: () => `<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:linear-gradient(160deg,#30d158,#0a84ff);border-radius:22%;font-size:1.3em">💬</span>`, w: 440, h: 400,
+    render(el) {
+      el.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;padding:18px;gap:12px">
+        <b style="font-size:16px">意见反馈</b>
+        <input id="fbTitle" placeholder="标题（一句话说清）" style="border:1px solid var(--separator);border-radius:9px;padding:8px 12px;font:inherit;background:var(--card-bg);color:var(--text)">
+        <textarea id="fbBody" rows="6" placeholder="详细说说你遇到的问题或建议…" style="border:1px solid var(--separator);border-radius:9px;padding:10px 12px;font:inherit;resize:none;background:var(--card-bg);color:var(--text)"></textarea>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <span class="pill-btn on" id="fbSend">提交到 GitHub Issues</span>
+        </div>
+        <div style="font-size:11.5px;color:#888">会在浏览器中打开 GitHub Issues 页面并预填内容</div></div>`;
+      el.querySelector('#fbSend').addEventListener('click', () => {
+        const t = el.querySelector('#fbTitle').value.trim();
+        const b = el.querySelector('#fbBody').value.trim();
+        if (!t) return notify('反馈', '先写个标题');
+        const url = `https://github.com/2099742859-lgtm/macos-web-demo/issues/new?title=${encodeURIComponent(t)}&body=${encodeURIComponent(b + `\n\n—— 来自 ${APP_VER.name}`)}`;
+        if (window.AndroidBridge && AndroidBridge.open) AndroidBridge.open(url);
+        else window.open(url, '_blank');
+        notify('反馈', '已拉起浏览器，感谢反馈！');
+      });
+    }
+  },
+
   /* ─── 强制退出 ─── */
   forcequit: {
     name: '强制退出应用程序', icon: () => ICONS.settings(), w: 380, h: 330, noResize: true,
@@ -2603,7 +2647,7 @@ let DOCK_APPS = JSON.parse(localStorage.getItem('mac_dock') || 'null') ||
   ['finder', 'launchpad', 'safari', 'mail', 'maps', 'photos', 'messages', 'facetime', 'music', 'podcast', 'tv', 'appstore', 'settings', 'terminal', 'calculator', 'notes', 'reminders', 'calendar', 'SEP', 'trash'];
 function saveDock() { localStorage.setItem('mac_dock', JSON.stringify(DOCK_APPS)); }
 /* 启动台 */
-const LAUNCHPAD_APPS = ['safari', 'voicememo', 'mail', 'maps', 'photos', 'messages', 'facetime', 'music', 'podcast', 'tv', 'appstore', 'settings', 'terminal', 'calculator', 'notes', 'reminders', 'calendar', 'clock', 'weather', 'activity', 'photobooth', 'textedit', 'stickies', 'dictionary', 'finder'];
+const LAUNCHPAD_APPS = ['safari', 'voicememo', 'mail', 'maps', 'photos', 'messages', 'facetime', 'music', 'podcast', 'tv', 'appstore', 'settings', 'terminal', 'calculator', 'notes', 'reminders', 'calendar', 'clock', 'weather', 'activity', 'photobooth', 'textedit', 'stickies', 'dictionary', 'github', 'feedback', 'finder'];
 
 /* 墙纸库（正版 macOS 壁纸，搬运自 macos-web） */
 const WALLPAPERS = [
