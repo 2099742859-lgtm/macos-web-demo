@@ -1,27 +1,19 @@
-# macOS Web Demo
+# macOS Web Demo · Web 版
 
-macOS 网页还原 · Android APK。纯 HTML/CSS/JS，无框架。
+macOS 网页还原，纯静态站点——扔到任何静态服务器（GitHub Pages / Nginx / Vercel）就能跑。
 
-## 构建
+## 部署
 
 ```bash
-cd android && ./build.sh
-# 输出 dist/macOS.apk
+# 把 web/ 目录内容放到站点根目录即可
+# 本地预览：
+cd web && python3 -m http.server 8080
 ```
 
-需要：Android SDK（platform android-30 + build-tools）、JDK 8+。
+## 与 APK 版的区别
 
-## 结构
+- 无原生桥：Safari 用 iframe 渲染、音量/截屏/录音等硬件能力降级或走 Web API
+- 跨域请求受浏览器 CORS 限制
+- 无 OTA（服务器上直接换文件就是更新）
 
-```
-android/   WebView 壳 + Java 桥
-web/       全部界面与逻辑
-ota/       差量更新清单
-```
-
-## 素材致谢
-
-- [PuruVJ/macos-web](https://github.com/PuruVJ/macos-web)（MIT）
-- [ful1e5/apple_cursor](https://github.com/ful1e5/apple_cursor)（GPL）
-
-仅供学习演示，与 Apple Inc. 无关。
+APK 版见 `main` 分支。

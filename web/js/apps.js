@@ -220,6 +220,19 @@ const APPS = {
         </div>
         <div class="sf-view" id="sfView"></div></div>`;
       const view = el.querySelector('#sfView'), urlInp = el.querySelector('#sfUrl');
+      /* Web 部署：无原生浏览器层，iframe 渲染 */
+      if (window.__isWebDeploy) {
+        view.innerHTML = '<iframe id="sfFrame" style="width:100%;height:100%;border:none;background:#fff" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>';
+        win.__safariGo = url => {
+          if (!/^https?:\/\//i.test(url)) url = (url.includes('.') && !url.includes(' '))
+            ? 'https://' + url : 'https://www.bing.com/search?q=' + encodeURIComponent(url);
+          el.querySelector('#sfFrame').src = url;
+          urlInp.value = url;
+        };
+        el.querySelector('#sfUrl').addEventListener('keydown', e => { if (e.key === 'Enter') win.__safariGo(e.target.value); });
+        win.__safariGo('https://www.bing.com');
+        return;
+      }
       function startPage() {
         view.innerHTML = `<div class="sf-body"><div class="sf-h">个人收藏</div>
           <div class="sf-fav">${FAVS.map(f =>
