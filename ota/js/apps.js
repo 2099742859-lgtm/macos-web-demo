@@ -1449,8 +1449,24 @@ const APPS = {
             <div class="upd-hint">提示：更新完成后，请删除后台重新打开 App</div>
           </div>
           ${lastCard}
-          <div id="updDetail"></div>`;
+          <div id="updDetail"></div>
+          <div id="updHistory"></div>`;
           const status = main.querySelector('#updStatus'), detail = main.querySelector('#updDetail');
+          /* 更新历史：拉取远程 version.json 的 history 字段 */
+          (async () => {
+            try {
+              const res = await otaSpeedTest();
+              const best = otaPick(res);
+              if (best && best.data.history && best.data.history.length) {
+                main.querySelector('#updHistory').innerHTML =
+                  `<h2 style="margin-top:16px">更新历史</h2>` +
+                  best.data.history.map(h => `<div class="upd-card" style="margin-top:10px;text-align:left">
+                    <div class="upd-new" style="font-size:14px">${h.name}</div>
+                    <div class="upd-notes">${h.notes.map(n => `· ${n}`).join('<br>')}</div>
+                  </div>`).join('');
+              }
+            } catch (e) {}
+          })();
           main.querySelector('#updCheck').addEventListener('click', async () => {
             status.innerHTML = `<div class="sf-spinner" style="margin:14px auto 6px"></div><div style="color:#888;font-size:12.5px">正在测速更新源…</div>`;
             detail.innerHTML = '';
