@@ -949,7 +949,7 @@ function buildDock() {
   dock.innerHTML = DOCK_APPS.map(id => {
     if (id === 'SEP') return '<div class="dock-sep"></div>';
     return dockItemHTML(id);
-  }).join('') + '<div class="dock-sep" id="dockRunSep" style="display:none"></div><span id="dockRunning"></span>';
+  }).join('') + '<div class="dock-sep" id="dockRunSep" style="display:none"></div><div id="dockRunning" style="display:contents"></div>';
   dock.querySelectorAll('.dock-item').forEach(bindDockItem);
 
   /* 放大效果：采用 macos-web 同款分段插值（0→2x, dL/2→1.414x, dL/1.25→1.1x, dL→1x） */
