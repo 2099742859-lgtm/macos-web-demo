@@ -291,10 +291,11 @@ const FILE_ICONS = {
   pdf: 'icons/filepdf.png', zip: 'icons/filetext.png', music: null, app: null,
 };
 
-/* ═══ 正版 macOS 图标覆盖（搬运自 macos-web / ryOS，MIT License） ═══ */
+/* ═══ 正版 macOS 图标覆盖（搬运自 macos-web / ryOS，MIT License） ═══
+   注：calendar 不在此列——它用动态 SVG，日期实时显示 */
 ['finder', 'launchpad', 'safari', 'mail', 'maps', 'messages', 'facetime', 'music',
  'podcast', 'tv', 'appstore', 'settings', 'terminal', 'calculator', 'notes',
- 'reminders', 'calendar', 'photos', 'photobooth', 'preview', 'textedit', 'stickies',
+ 'reminders', 'photos', 'photobooth', 'preview', 'textedit', 'stickies',
  'dictionary'].forEach(n => {
   ICONS[n] = () => `<img src="icons/${n}.png" draggable="false" alt="${n}">`;
 });
