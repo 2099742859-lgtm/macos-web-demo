@@ -5,7 +5,11 @@ const BOOT_TS = Date.now();
 
 /* 文件内容库（持久化；QL_TEXT 为内置只读内容） */
 const FILE_CONTENTS = JSON.parse(localStorage.getItem('mac_files') || '{}');
-function saveFiles() { localStorage.setItem('mac_files', JSON.stringify(FILE_CONTENTS)); }
+function saveFiles() {
+  try { localStorage.setItem('mac_files', JSON.stringify(FILE_CONTENTS)); }
+  catch (e) { notify('储存空间', '文件内容过大，localStorage 已满——大文件请用终端 wget 存 IndexedDB'); }
+  rebuildFileIndex();
+}
 function fileContent(name) {
   if (FILE_CONTENTS[name] !== undefined) return FILE_CONTENTS[name];
   if (typeof QL_TEXT !== 'undefined' && QL_TEXT[name] !== undefined) return QL_TEXT[name];
@@ -36,7 +40,9 @@ try {
 function saveVFS() {
   const out = {};
   Object.keys(VFS).forEach(k => out[k] = { type: 'folder', children: VFS[k].children });
-  localStorage.setItem('mac_vfs', JSON.stringify(out));
+  try { localStorage.setItem('mac_vfs', JSON.stringify(out)); }
+  catch (e) { notify('储存空间', '目录结构过大，localStorage 已满'); }
+  rebuildFileIndex();
 }
 
 function fileIcon(name) {
@@ -53,9 +59,13 @@ function fileIcon(name) {
 
 /* 文件索引（聚焦搜索用）：{name, folder} */
 const FILE_INDEX = [];
-Object.keys(VFS).forEach(folder => VFS[folder].children.forEach(c => {
-  if (!VFS[c]) FILE_INDEX.push({ name: c, folder });
-}));
+function rebuildFileIndex() {
+  FILE_INDEX.length = 0;
+  Object.keys(VFS).forEach(folder => (VFS[folder].children || []).forEach(c => {
+    if (!VFS[c]) FILE_INDEX.push({ name: c, folder });
+  }));
+}
+rebuildFileIndex();
 
 /* Quick Look 文本内容 */
 const QL_TEXT = {
@@ -517,9 +527,28 @@ const APPS = {
         }
         if (cmd === 'echo') return print(esc(rest) || '');
         if (cmd === 'say') return notify('终端', `🔊 ${rest || '……'}`);
+        /* 终端里直接问 Siri */
+        if (cmd === 'siri') {
+          if (!rest) return print('usage: siri <问题>');
+          print('<span class="tc">siri 思考中…</span>');
+          aiChat(rest, true).then(r => print(r ? esc(r.replace(/\[.*?\]/g, '').trim()) : 'siri: 网络不可用'));
+          return;
+        }
         if (cmd === 'cd') {
-          if (!rest || rest === '~' || rest === '..') { cwd = 'User'; }
-          else if (isDir(rest)) cwd = rest;
+          /* 路径解析：绝对/相对/../单级 */
+          const resolvePath = p => {
+            if (!p || p === '~') return 'User';
+            let parts = (p.startsWith('/') ? p.replace(/^\/(Users\/)?/, '').split('/') : (cwd === 'User' ? [] : [cwd]).concat(p.split('/')));
+            const out = [];
+            parts.filter(Boolean).forEach(seg => {
+              if (seg === '.') return;
+              if (seg === '..') out.pop();
+              else out.push(seg);
+            });
+            return out.join('/') || 'User';
+          };
+          const target = resolvePath(rest);
+          if (isDir(target) || target === 'User') { cwd = target; }
           else return print(`cd: no such file or directory: ${esc(rest)}`);
           el.querySelector('#termPath').innerHTML = `&nbsp;${cwd === 'User' ? '~' : cwd} %&nbsp;`;
           return;
@@ -537,9 +566,11 @@ const APPS = {
           return;
         }
         if (cmd === 'rm') {
+          const base = rest.split('/').pop();   /* 支持 ../file 相对路径 */
           const items = kids();
-          const i = items.indexOf(rest);
-          if (i >= 0) { items.splice(i, 1); delete VFS[rest]; delete FILE_CONTENTS[rest]; saveVFS(); saveFiles(); return; }
+          const i = items.indexOf(base);
+          if (i >= 0) { items.splice(i, 1); delete VFS[base]; delete FILE_CONTENTS[base]; saveVFS(); saveFiles(); return; }
+          if (FILE_CONTENTS[base] !== undefined) { delete FILE_CONTENTS[base]; saveFiles(); return; }
           return print(`rm: ${esc(rest)}: No such file or directory`);
         }
         if (cmd === 'mv') {
@@ -679,6 +710,7 @@ const APPS = {
           let p = 0;
           const iv = setInterval(() => {
             if (!document.contains(out)) return clearInterval(iv);
+      const _w = out.closest && out.closest('.window'); if (_w && _w.dataset.minimized) return;
             p += 25;
             if (p >= 100) { clearInterval(iv); print(`🍺 ${pkg} was successfully installed!`); return; }
             print(`==> Installing ${pkg}... ${p}%`);
@@ -2228,7 +2260,8 @@ const APPS = {
         procs.forEach(p => p.cpu = Math.max(0.1, Math.min(25, p.cpu + (Math.random() - 0.5) * 3)));
       }
       draw();
-      const iv = setInterval(() => { if (!document.contains(cv)) return clearInterval(iv); draw(); }, 1000);
+      const iv = setInterval(() => { if (!document.contains(cv)) return clearInterval(iv);
+      const _w = cv.closest && cv.closest('.window'); if (_w && _w.dataset.minimized) return; draw(); }, 1000);
     }
   },
 
@@ -2695,7 +2728,7 @@ const STORE_APPS = [
 ];
 
 /* ── 2048 ── */
-function render2048(el) {
+function render2048(el, win) {
   let g, score;
   const COLORS = { 2: '#eee4da', 4: '#ede0c8', 8: '#f2b179', 16: '#f59563', 32: '#f67c5f', 64: '#f65e3b', 128: '#edcf72', 256: '#edcc61', 512: '#edc850', 1024: '#edc53f', 2048: '#edc22e' };
   el.innerHTML = `<div class="g2048"><div class="g2-head"><b>2048</b><span>得分 <b id="g2Score">0</b></span>
@@ -2755,7 +2788,7 @@ function render2048(el) {
 }
 
 /* ── 贪吃蛇 ── */
-function renderSnake(el) {
+function renderSnake(el, win) {
   el.innerHTML = `<div class="gsnake"><div class="g2-head"><b>贪吃蛇</b><span>得分 <b id="gsScore">0</b></span>
     <span class="pill-btn on" id="gsNew">重新开始</span></div>
     <canvas id="gsCv" width="288" height="288"></canvas>
@@ -2807,7 +2840,7 @@ function renderSnake(el) {
 }
 
 /* ── 扫雷 ── */
-function renderMines(el) {
+function renderMines(el, win) {
   const N = 9, M = 10;
   el.innerHTML = `<div class="gmines"><div class="g2-head"><span id="gmFace">🙂</span><span>剩余 <b id="gmMines">${M}</b></span>
     <span class="pill-btn on" id="gmNew">新游戏</span></div>
@@ -2864,6 +2897,17 @@ function renderMines(el) {
         if (lp) { clearTimeout(lp); lp = null; reveal(+cell.dataset.i); }
       });
       cell.addEventListener('pointerleave', () => { if (lp) { clearTimeout(lp); lp = null; } });
+      /* PC 端右键插旗 */
+      cell.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (over) return;
+        const i = +cell.dataset.i;
+        if (!open[i]) {
+          flag[i] = !flag[i];
+          el.querySelector('#gmMines').textContent = M - flag.filter(Boolean).length;
+          draw();
+        }
+      });
     });
   }
   function reveal(i) {
@@ -2927,7 +2971,7 @@ function renderRain(el, win) {
 }
 
 /* ── 番茄钟 ── */
-function renderPomodoro(el) {
+function renderPomodoro(el, win) {
   let left = 25 * 60, run = false, iv = null;
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   el.innerHTML = `<div class="rain-app"><div class="rain-ico">🍅</div>
@@ -2953,7 +2997,7 @@ function renderPomodoro(el) {
 }
 
 /* ── 指南针 ── */
-function renderCompass(el) {
+function renderCompass(el, win) {
   el.innerHTML = `<div class="rain-app"><div class="compass-dial" id="cpDial">
     ${['北', '东', '南', '西'].map((d, i) => `<span class="cp-dir" style="transform:rotate(${i * 90}deg) translateY(-86px)">${d}</span>`).join('')}
     <div class="cp-needle"></div></div>
@@ -2995,7 +3039,7 @@ function renderCompass(el) {
 
 
 /* ── 俄罗斯方块 ── */
-function renderTetris(el) {
+function renderTetris(el, win) {
   const COLS = 10, ROWS = 20, CS = 19;
   const SHAPES = [
     [[1,1,1,1]], [[1,1],[1,1]], [[0,1,0],[1,1,1]],
@@ -3043,7 +3087,7 @@ function renderTetris(el) {
 }
 
 /* ── 井字棋（Minimax AI） ── */
-function renderTicTacToe(el) {
+function renderTicTacToe(el, win) {
   let board, over;
   el.innerHTML = `<div class="ttt-app"><b>井字棋 · 你执 ❌</b><div class="ttt-board" id="tttBoard"></div>
     <div id="tttMsg" style="font-size:13px;color:#888"></div>
@@ -3092,7 +3136,7 @@ function renderTicTacToe(el) {
 }
 
 /* ── 记忆翻牌 ── */
-function renderMemory(el) {
+function renderMemory(el, win) {
   const EMO = ['🐳','🍎','🌙','⭐','🎵','🌸','🚀','🎨'];
   let cards, open, matched, moves;
   el.innerHTML = `<div class="mem-app"><b>记忆翻牌</b><span id="memInfo" style="font-size:13px;color:#888">步数 0</span>
@@ -3122,7 +3166,7 @@ function renderMemory(el) {
 }
 
 /* ── 画板 ── */
-function renderPaint(el) {
+function renderPaint(el, win) {
   el.innerHTML = `<div class="pt-app"><div class="pt-tools">
     ${['#000','#ff3b30','#ff9500','#ffcc00','#34c759','#0a84ff','#af52de'].map((c,i)=>`<span class="pt-color ${i===0?'sel':''}" data-c="${c}" style="background:${c}"></span>`).join('')}
     <input type="range" min="2" max="20" value="4" id="ptSize">
@@ -3143,7 +3187,7 @@ function renderPaint(el) {
 }
 
 /* ── 翻译（MyMemory 免费 API） ── */
-function renderTranslate(el) {
+function renderTranslate(el, win) {
   el.innerHTML = `<div class="tl-app"><b>翻译</b>
     <textarea id="tlIn" placeholder="输入要翻译的文字…" rows="3"></textarea>
     <div style="display:flex;gap:8px;align-items:center">
@@ -3162,7 +3206,7 @@ function renderTranslate(el) {
 }
 
 /* ── 二维码生成（qrserver 免费 API） ── */
-function renderQRCode(el) {
+function renderQRCode(el, win) {
   el.innerHTML = `<div class="qr-app"><b>二维码生成</b>
     <input id="qrIn" placeholder="输入文字或网址…">
     <span class="pill-btn on" id="qrGo">生成</span>
@@ -3175,7 +3219,7 @@ function renderQRCode(el) {
 }
 
 /* ── 每日诗词（今日诗词免费 API） ── */
-function renderPoem(el) {
+function renderPoem(el, win) {
   el.innerHTML = `<div class="poem-app"><b>每日诗词</b><div class="poem-body" id="poemBody"><div class="sf-spinner"></div></div>
     <span class="pill-btn on" id="poemNew">换一首</span></div>`;
   async function load() {
@@ -3190,7 +3234,7 @@ function renderPoem(el) {
 }
 
 /* ── 节拍器（Web Audio 真发声） ── */
-function renderMetronome(el) {
+function renderMetronome(el, win) {
   el.innerHTML = `<div class="met-app"><b>节拍器</b>
     <div class="met-bpm"><span id="metBpm">100</span> BPM</div>
     <input type="range" min="40" max="208" value="100" id="metSlider" style="width:220px">
@@ -3217,7 +3261,7 @@ function renderMetronome(el) {
 }
 
 /* ── 抛硬币 ── */
-function renderCoin(el) {
+function renderCoin(el, win) {
   el.innerHTML = `<div class="coin-app"><b>抛硬币</b><div class="coin" id="coinFace">🪙</div>
     <span class="pill-btn on" id="coinGo">抛！</span><div id="coinRes" style="font-size:15px;font-weight:600"></div></div>`;
   el.querySelector('#coinGo').addEventListener('click', () => {
@@ -3232,7 +3276,7 @@ function renderCoin(el) {
 }
 
 /* ── 冷笑话（LongCat AI 真生成） ── */
-function renderJokes(el) {
+function renderJokes(el, win) {
   el.innerHTML = `<div class="joke-app"><b>冷笑话</b><div class="joke-body" id="jokeBody">点按钮来一个…</div>
     <span class="pill-btn on" id="jokeNew">再来一个</span></div>`;
   el.querySelector('#jokeNew').addEventListener('click', async () => {
