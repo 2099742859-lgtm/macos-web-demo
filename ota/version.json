@@ -1,18 +1,19 @@
 {
-  "code": 26,
-  "name": "1.1.3_beta_261005(4)",
+  "code": 27,
+  "name": "1.1.3_beta_261005(5)",
   "minCode": 1,
   "notes": [
-    "新增多语言支持",
+    "修复多语言无法切换",
+    "修复启动台翻页",
     "修复了一些已知问题"
   ],
   "files": {
     "index.html": "5bf16bc4683be4b6",
     "jszip.min.js": "acc7e41455a80765",
-    "css/style.css": "e7232d0176285709",
+    "css/style.css": "756f5ec4a10955f9",
     "js/icons.js": "d1b8be71c1c8d91c",
     "js/apps.js": "e5f2c33a2b05504e",
-    "js/main.js": "6f44d4b0b4250e1a",
+    "js/main.js": "cff5c92363807b70",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",

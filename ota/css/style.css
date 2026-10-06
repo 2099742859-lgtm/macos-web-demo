@@ -160,8 +160,11 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000;
 .lp-search input { width:230px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.4);
   background:rgba(255,255,255,.18); color:#fff; text-align:center; outline:none; font-size:14px; }
 .lp-search input::placeholder { color:rgba(255,255,255,.7); }
-.lp-grid { display:grid; grid-template-columns:repeat(auto-fill, 108px); gap:26px 18px; margin-top:44px;
-  justify-content:center; max-width:860px; }
+.lp-grid { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; margin-top:44px;
+  scrollbar-width:none; max-width:92%; }
+.lp-grid::-webkit-scrollbar { display:none; }
+.lp-page { flex:0 0 100%; min-width:100%; scroll-snap-align:start;
+  display:grid; gap:26px 18px; justify-content:center; align-content:start; }
 .lp-app { display:flex; flex-direction:column; align-items:center; gap:8px; }
 .lp-app svg { width:66px; height:66px; filter:drop-shadow(0 4px 8px rgba(0,0,0,.3)); transition:transform .12s; }
 .lp-app:active svg { transform:scale(.88); filter:brightness(.75); }
