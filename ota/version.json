@@ -1,8 +1,9 @@
 {
-  "code": 25,
-  "name": "1.1.3_beta_261005(3)",
+  "code": 26,
+  "name": "1.1.3_beta_261005(4)",
   "minCode": 1,
   "notes": [
+    "新增多语言支持",
     "修复了一些已知问题"
   ],
   "files": {
@@ -11,7 +12,7 @@
     "css/style.css": "e7232d0176285709",
     "js/icons.js": "d1b8be71c1c8d91c",
     "js/apps.js": "e5f2c33a2b05504e",
-    "js/main.js": "5d86fe7b033f614d",
+    "js/main.js": "6f44d4b0b4250e1a",
     "icons/finder.png": "c14e156894692c54",
     "icons/launchpad.png": "faf594b61be97ca7",
     "icons/safari.png": "9d33999255dbb3b5",
