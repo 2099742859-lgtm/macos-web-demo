@@ -263,30 +263,30 @@ const APPS = {
         else {
           tabs[active].url = url;
           tabs[active].title = '';
-          AndroidBridge.browserLoadActive(url);
+          if (window.AndroidBridge && AndroidBridge.browserLoadActive) AndroidBridge.browserLoadActive(url);
           drawTabs();
         }
       }
       function switchTab(i) {
         active = i;
-        AndroidBridge.browserSwitchTab(i);
+        if (window.AndroidBridge && AndroidBridge.browserSwitchTab) AndroidBridge.browserSwitchTab(i);
         urlInp.value = tabs[i].url || '';
         drawTabs();
       }
       function closeTab(i) {
-        AndroidBridge.browserCloseTab(i);
+        if (window.AndroidBridge && AndroidBridge.browserCloseTab) AndroidBridge.browserCloseTab(i);
         tabs.splice(i, 1);
         if (active >= tabs.length) active = tabs.length - 1;
         if (!tabs.length) { active = -1; startPage(); urlInp.value = ''; }
-        else { AndroidBridge.browserSwitchTab(active); urlInp.value = tabs[active].url; }
+        else { if (window.AndroidBridge && AndroidBridge.browserSwitchTab) AndroidBridge.browserSwitchTab(active); urlInp.value = tabs[active].url; }
         drawTabs();
       }
       /* Java 侧页面标题回调 */
-      window.__tabState = (i, title, url) => {
+      win.__tabState = (i, title, url) => {
         if (tabs[i]) { tabs[i].title = title; tabs[i].url = url; drawTabs(); if (i === active) urlInp.value = url; }
       };
       startPage();
-      window.__safariGo = go;
+      win.__safariGo = go;
       urlInp.addEventListener('keydown', e => { if (e.key === 'Enter' && urlInp.value.trim()) go(urlInp.value.trim()); });
       el.querySelector('#sfB').addEventListener('click', () => window.AndroidBridge && AndroidBridge.browserBack());
       el.querySelector('#sfF').addEventListener('click', () => window.AndroidBridge && AndroidBridge.browserForward());
@@ -617,7 +617,15 @@ const APPS = {
           if (hit && hit !== 'launchpad') { openApp(hit); return; }
           return print(`The application ${esc(rest)} does not exist.`);
         }
-        if (cmd === 'browse') { if (!rest) return print('usage: browse <url>'); openApp('safari'); setTimeout(() => window.__safariGo && window.__safariGo(rest), 400); return; }
+        if (cmd === 'browse') {
+          if (!rest) return print('usage: browse <url>');
+          openApp('safari');
+          setTimeout(() => {
+            const w = document.getElementById(winByApp.safari);
+            if (w && w.__safariGo) w.__safariGo(rest);
+          }, 400);
+          return;
+        }
         if (cmd === 'curl') {
           if (!rest) return print('usage: curl <url>');
           print(`fetching ${esc(rest)} ...`);
@@ -693,7 +701,7 @@ const APPS = {
         }
       });
       /* Siri/外部程序执行接口 */
-      window.__termExec = cmd => { inp.value = cmd; inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); };
+      win.__termExec = cmd => { inp.value = cmd; inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); };
       el.querySelector('.term').addEventListener('click', () => inp.focus());
     }
   },
@@ -1966,8 +1974,8 @@ const APPS = {
         }
       }
       el.querySelector('#teSave').addEventListener('click', save);
-      el.querySelector('#teSaveAs').addEventListener('click', () => {
-        const name = prompt('存储为文件名：', file || '未命名.txt');
+      el.querySelector('#teSaveAs').addEventListener('click', async () => {
+        const name = await macPrompt('存储为文件名：', file || '未命名.txt');
         if (!name) return;
         file = name;
         FILE_CONTENTS[file] = ta.value;
@@ -2893,7 +2901,7 @@ function renderCompass(el) {
   };
   window.addEventListener('deviceorientationabsolute', onOrient, true);
   window.addEventListener('deviceorientation', onOrient, true);
-  el.closest('.window')._cleanup = () => {
+  if (win) win._cleanup = () => {
     window.removeEventListener('deviceorientationabsolute', onOrient, true);
     window.removeEventListener('deviceorientation', onOrient, true);
   };
@@ -2957,7 +2965,7 @@ function renderTetris(el) {
   };
   el.tabIndex = 0; el.addEventListener('keydown', keyH);
   el.querySelector('#ttNew').addEventListener('click', start);
-  el.closest('.window')._cleanup = () => clearInterval(iv);
+  if (win) win._cleanup = () => clearInterval(iv);
   start();
 }
 
@@ -3132,7 +3140,7 @@ function renderMetronome(el) {
     if (iv) { clearInterval(iv); iv = null; el.querySelector('#metBtn').textContent = '开始'; }
     else { tick(); iv = setInterval(tick, 60000 / +el.querySelector('#metSlider').value); el.querySelector('#metBtn').textContent = '停止'; }
   });
-  el.closest('.window')._cleanup = () => { clearInterval(iv); if (ac) ac.close(); };
+  if (win) win._cleanup = () => { clearInterval(iv); if (ac) ac.close(); };
 }
 
 /* ── 抛硬币 ── */
@@ -3175,7 +3183,7 @@ function installApp(id, silent) {
     w: GAME_SIZES[id] ? GAME_SIZES[id][0] : 420,
     h: GAME_SIZES[id] ? GAME_SIZES[id][1] : 380,
     noResize: true,
-    render(el) { (GAME_RENDERERS[id] || (e => e.innerHTML = '<div class="fs-empty">建设中</div>'))(el); },
+    render(el, win) { (GAME_RENDERERS[id] || ((e, w) => e.innerHTML = '<div class="fs-empty">建设中</div>'))(el, win); },
   };
   if (!LAUNCHPAD_APPS.includes(id)) LAUNCHPAD_APPS.splice(LAUNCHPAD_APPS.length - 1, 0, id);
   const inst = JSON.parse(localStorage.getItem('mac_installed') || '[]');

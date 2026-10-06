@@ -160,7 +160,7 @@ public class MainActivity extends Activity {
                 String t = view.getTitle() == null ? "" : view.getTitle()
                         .replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ");
                 final String tt = t;
-                web.evaluateJavascript("window.__tabState && window.__tabState(" + idx + ", '" + tt + "', '" + url + "')", null);
+                web.evaluateJavascript("var sw=document.getElementById(winByApp.safari);sw&&sw.__tabState&&sw.__tabState(" + idx + ", '" + tt + "', '" + url + "')", null);
             }
         });
         w.setWebChromeClient(new WebChromeClient() {

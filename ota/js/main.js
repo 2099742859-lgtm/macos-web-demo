@@ -54,6 +54,8 @@ function setClockOpts(h24, sec) {
   if (sec !== undefined) settings.showSec = sec;
   saveSettings();
   tickClock && tickClock();
+  /* 刷新频率随设置重建 */
+  if (window._clockIv) { clearInterval(window._clockIv); window._clockIv = setInterval(() => tickClock(), settings.showSec ? 1000 : 5000); }
 }
 function setDockPos(pos) {
   settings.dockPos = pos; saveSettings();
@@ -385,7 +387,7 @@ function setBrightness(v) {
 }
 
 /* ───────── OTA 在线更新（多源测速 + 防回滚 + 可屏蔽 + 自动重启） ───────── */
-const APP_VER = { code: 27, name: '1.1.3_beta_261005(5)' };
+const APP_VER = { code: 28, name: '1.1.4_beta_261005' };
 const OTA_SOURCES = [
   ['GitHub', 'https://raw.githubusercontent.com/2099742859-lgtm/macos-web-demo/main/ota/'],
   ['jsDelivr', 'https://cdn.jsdelivr.net/gh/2099742859-lgtm/macos-web-demo@main/ota/'],
@@ -564,6 +566,28 @@ async function translateUI(lang) {
   }
   nodes.forEach((n, i) => { if (translated[i]) n.textContent = translated[i]; });
   notify('语言', `已切换到 ${LANGS[lang]}`);
+}
+
+/* ───────── 自绘弹层（替代 prompt/confirm） ───────── */
+function macPrompt(title, def) {
+  return new Promise(res => {
+    const ov = document.createElement('div');
+    ov.className = 'mac-modal';
+    ov.innerHTML = `<div class="mac-modal-card">
+      <div class="mac-modal-t">${title}</div>
+      <input class="mac-modal-in" value="${def || ''}">
+      <div class="mac-modal-btns">
+        <span class="pill-btn" data-a="no">取消</span>
+        <span class="pill-btn on" data-a="ok">好</span>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const inp = ov.querySelector('input');
+    setTimeout(() => inp.focus(), 100);
+    const done = v => { ov.remove(); res(v); };
+    ov.querySelector('[data-a="ok"]').addEventListener('click', () => done(inp.value.trim() || null));
+    ov.querySelector('[data-a="no"]').addEventListener('click', () => done(null));
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(inp.value.trim() || null); if (e.key === 'Escape') done(null); });
+  });
 }
 
 /* ───────── 表情与符号选择器 ───────── */
@@ -1300,11 +1324,14 @@ async function apiFetch(url, opts, timeoutMs, retries) {
 
 const siriHist = [];   /* 上下文记忆（有界：最近 24 轮） */
 const SIRI_CTX_TTL = 30 * 60 * 1000;   /* 30 分钟无交互才算新对话 */
-async function aiChat(userText) {
-  const err = rateOK();
-  if (err) return '⚠ ' + err;
-  RATE.inFlight = true;
-  RATE.ts.push(Date.now());
+async function aiChat(userText, internal) {
+  /* internal=true 表示 Agent 循环内部调用，跳过限流 */
+  if (!internal) {
+    const err = rateOK();
+    if (err) return '⚠ ' + err;
+    RATE.inFlight = true;
+    RATE.ts.push(Date.now());
+  }
   try {
     const d = new Date();
     let weatherInfo = '';
@@ -1413,7 +1440,10 @@ function siriExec(reply) {
   eat(/\[SCALE:(\d+)\]/, m => { settings.scale = Math.max(80, Math.min(140, +m[1])); saveSettings(); applyStage(); }, m => `界面缩放到${m[1]}%`);
   eat(/\[SHELL:([^\]]+)\]/, m => {
     openApp('terminal');
-    setTimeout(() => { if (window.__termExec) window.__termExec(m[1]); }, 700);
+    setTimeout(() => {
+      const w = document.getElementById(winByApp.terminal);
+      if (w && w.__termExec) w.__termExec(m[1]);
+    }, 700);
   }, m => `终端执行「${m[1]}」`);
   /* 创建文件：桌面/文稿（宽容匹配：竖线可省略，内容可空） */
   eat(/\[CREATE:([^|\]]+?)(?:\|([^\]]*))?\]/, m => {
@@ -1472,7 +1502,7 @@ async function siriAsk(text) {
   /* Agent 循环：执行动作 → 回报结果 → 允许继续规划，最多 3 轮 */
   let userMsg = text, finalReply = '', round = 0;
   while (round < 3) {
-    const reply = await aiChat(userMsg);
+    const reply = await aiChat(userMsg, round > 0);
     if (!reply) {
       $('#siriSub').textContent = !NET.online ? '离线了，先连网再聊' : '网络好像有点问题，稍后再试试';
       return;
@@ -1879,6 +1909,7 @@ function addDeskIcon(name, ico, type) {
 function addAppShortcut(id) {
   if (deskIcons.some(d => d[2] === 'app:' + id)) return notify('桌面', '快捷方式已存在');
   deskIcons.push([APPS[id].name, APPS[id].icon(), 'app:' + id]);
+  saveDesk();   /* 落盘 */
   buildDeskIcons();
   notify('桌面', `已为「${APPS[id].name}」创建快捷方式`);
 }
@@ -1944,7 +1975,8 @@ function startClock() {
     const nc = $('#ncCal'); if (nc) nc.innerHTML = `<span style="font-size:30px;font-weight:300">${d.getDate()}</span> 日`;
   };
   tickClock();
-  setInterval(() => tickClock(), settings.showSec ? 1000 : 5000);
+  if (window._clockIv) clearInterval(window._clockIv);
+  window._clockIv = setInterval(() => tickClock(), settings.showSec ? 1000 : 5000);
   netCheck();
   window.addEventListener('online', () => { netCheck(); notify('网络', '已连接到互联网'); });
   window.addEventListener('offline', () => { netCheck(); notify('网络', '网络连接已断开'); });

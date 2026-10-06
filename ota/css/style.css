@@ -1678,3 +1678,13 @@ body.dark .upd-hint { color:rgba(255,160,40,.9); }
 .lp-dots { display:flex; gap:8px; justify-content:center; padding:10px 0 4px; }
 .lp-dot { width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.35); transition:background .2s, transform .2s; }
 .lp-dot.on { background:#fff; transform:scale(1.25); }
+
+/* ═══ 自绘弹层 ═══ */
+.mac-modal { position:fixed; inset:0; z-index:9900; background:rgba(0,0,0,.3); display:flex; align-items:center; justify-content:center; }
+.mac-modal-card { width:300px; background:var(--card-bg); border-radius:16px; padding:20px 18px 14px;
+  box-shadow:0 20px 60px rgba(0,0,0,.35); }
+.mac-modal-t { font-size:14px; font-weight:600; margin-bottom:12px; }
+.mac-modal-in { width:100%; border:1px solid var(--separator); border-radius:9px; padding:8px 12px;
+  font:inherit; background:rgba(120,120,128,.1); color:var(--text); outline:none; }
+.mac-modal-in:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(10,132,255,.25); }
+.mac-modal-btns { display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
